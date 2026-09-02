@@ -1,0 +1,292 @@
+"""可复用的滑块、按钮和精确输入框控件。"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+import pygame
+
+from config import ACCENT, INPUT_ACTIVE, INPUT_BG, INPUT_BORDER, MUTED, RED, SELECT_BG, TEXT
+from core.fonts import FONT_SMALL, FONT_TINY
+from render.primitives import draw_text, rounded_rect
+from utils import clamp, format_num, format_sig3
+
+@dataclass
+class Slider:
+    label: str
+    x: int
+    y: int
+
+    w: int
+    vmin: float
+    vmax: float
+    value: float
+    unit: str = ""
+
+    decimals: int = 2
+    dragging: bool = False
+
+    def knob_x(self):
+        t = (self.value - self.vmin) / max(1e-12, self.vmax - self.vmin)
+        return int(self.x + clamp(t, 0.0, 1.0) * self.w)
+
+    def set_value(self, value):
+        self.value = clamp(float(value), self.vmin, self.vmax)
+
+    def set_from_mouse(self, mx):
+        t = clamp((mx - self.x) / self.w, 0.0, 1.0)
+
+        self.value = self.vmin + t * (self.vmax - self.vmin)
+
+    def handle_event(self, event):
+        changed = False
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mx, my = event.pos
+            kx = self.knob_x()
+            hit_knob = abs(mx - kx) < 16 and abs(my - self.y) < 18
+
+            hit_track = self.x <= mx <= self.x + self.w and abs(my - self.y) < 12
+            if hit_knob or hit_track:
+                self.dragging = True
+                self.set_from_mouse(mx)
+                changed = True
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.dragging = False
+        elif event.type == pygame.MOUSEMOTION and self.dragging:
+            self.set_from_mouse(event.pos[0])
+            changed = True
+
+        return changed
+
+    def draw(self, surface, value_text=None):
+        pygame.draw.line(surface, (40, 50, 80),
+                         (self.x, self.y + 2), (self.x + self.w, self.y + 2), 8)
+        pygame.draw.line(surface, (55, 68, 105),
+                         (self.x, self.y), (self.x + self.w, self.y), 6)
+        kx = self.knob_x()
+        if kx > self.x:
+            pygame.draw.line(surface, ACCENT,
+                             (self.x, self.y), (kx, self.y), 6)
+
+        for i in range(6):
+            tx = self.x + i * self.w / 5
+            pygame.draw.line(surface, (80, 95, 135),
+                             (tx, self.y - 6), (tx, self.y + 6), 1)
+        pygame.draw.circle(surface, (4, 8, 18), (kx + 2, self.y + 3), 14)
+        pygame.draw.circle(surface, (50, 80, 130), (kx, self.y), 14)
+        pygame.draw.circle(surface, ACCENT, (kx, self.y), 12)
+
+        pygame.draw.circle(surface, (140, 200, 255), (kx, self.y), 8)
+        pygame.draw.circle(surface, (220, 245, 255), (kx - 4, self.y - 4), 4)
+        draw_text(surface, self.label, (self.x, self.y - 30), FONT_SMALL, MUTED)
+        if value_text is None:
+            value_text = f"{format_sig3(self.value)}{self.unit}"
+        draw_text(surface, value_text, (self.x + self.w, self.y - 30),
+                  FONT_SMALL, TEXT, anchor="topright")
+
+
+
+@dataclass
+class Button:
+    text: str
+    rect: pygame.Rect
+    _hover: bool = field(default=False, init=False, repr=False)
+
+    def draw(self, surface, active=False):
+        self._hover = self.rect.collidepoint(pygame.mouse.get_pos())
+        if active:
+            bg, border = (45, 88, 145), (100, 160, 240)
+        elif self._hover:
+            bg, border = (38, 52, 90), (90, 115, 165)
+        else:
+            bg, border = (28, 38, 66), (65, 82, 125)
+        rounded_rect(surface, self.rect, bg, 12, 1, border)
+
+        pygame.draw.rect(surface, (230, 240, 255),
+                         (self.rect.x + 5, self.rect.y + 2,
+                          self.rect.w - 10, 2), border_radius=2)
+        draw_text(surface, self.text, self.rect.center,
+                  FONT_SMALL, TEXT, anchor="center")
+
+    def clicked(self, event):
+        return (event.type == pygame.MOUSEBUTTONDOWN
+                and event.button == 1
+                and self.rect.collidepoint(event.pos))
+
+
+class InputBox:
+    def __init__(self, key, label, x, y, w, value, unit=""):
+        self.key = key
+        self.label = label
+
+        self.rect = pygame.Rect(x, y, w, 28)
+        self.unit = unit
+        self.text = self.format_value(value)
+        self.old_text = self.text
+        self.active = False
+
+        self.cursor = len(self.text)
+        self.anchor = self.cursor
+        self.dragging = False
+        self.blink_timer = 0.0
+        self.show_cursor = True
+
+        self.invalid_flash = 0.0
+
+    def format_value(self, value):
+        if self.key in ("anim_speed", "speed"):
+            return f"{value:.2f}"
+        return format_num(value)
+
+    def set_text_value(self, value):
+        if not self.active:
+            self.text = self.format_value(value)
+            self.cursor = len(self.text)
+
+            self.anchor = self.cursor
+            self.old_text = self.text
+
+    def has_selection(self):
+        return self.cursor != self.anchor
+
+    def selection_range(self):
+        return min(self.cursor, self.anchor), max(self.cursor, self.anchor)
+
+    def text_width(self, s):
+        return FONT_SMALL.size(s)[0]
+
+    def index_from_mouse_x(self, mx):
+        rel_x = max(0, mx - (self.rect.x + 7))
+
+        best, best_dist = 0, 10**9
+        for i in range(len(self.text) + 1):
+            dist = abs(self.text_width(self.text[:i]) - rel_x)
+            if dist < best_dist:
+                best_dist, best = dist, i
+        return best
+
+    def delete_selection(self):
+        if not self.has_selection():
+            return False
+
+        a, b = self.selection_range()
+        self.text = self.text[:a] + self.text[b:]
+        self.cursor = self.anchor = a
+        return True
+
+    def insert_text(self, s):
+        self.delete_selection()
+
+        self.text = self.text[:self.cursor] + s + self.text[self.cursor:]
+        self.cursor += len(s)
+        self.anchor = self.cursor
+
+    def move_cursor(self, new_pos, selecting=False):
+        self.cursor = int(clamp(new_pos, 0, len(self.text)))
+        if not selecting:
+            self.anchor = self.cursor
+
+
+    def consume_key(self, event):
+        ctrl = bool(event.mod & pygame.KMOD_CTRL)
+        shift = bool(event.mod & pygame.KMOD_SHIFT)
+        if ctrl and event.key == pygame.K_a:
+            self.anchor, self.cursor = 0, len(self.text)
+            return None
+        if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            self.active = self.dragging = False
+
+            return "commit", self.key, self.text
+        if event.key == pygame.K_ESCAPE:
+            self.text = self.old_text
+            self.cursor = self.anchor = len(self.text)
+            self.active = self.dragging = False
+            return "cancel", self.key, None
+        if event.key == pygame.K_LEFT:
+            self.move_cursor(self.cursor - 1, shift)
+        elif event.key == pygame.K_RIGHT:
+            self.move_cursor(self.cursor + 1, shift)
+        elif event.key == pygame.K_HOME:
+            self.move_cursor(0, shift)
+        elif event.key == pygame.K_END:
+            self.move_cursor(len(self.text), shift)
+        elif event.key == pygame.K_BACKSPACE:
+            if not self.delete_selection() and self.cursor > 0:
+                self.text = self.text[:self.cursor - 1] + self.text[self.cursor:]
+
+                self.cursor -= 1
+                self.anchor = self.cursor
+        elif event.key == pygame.K_DELETE:
+            if not self.delete_selection() and self.cursor < len(self.text):
+                self.text = self.text[:self.cursor] + self.text[self.cursor + 1:]
+                self.anchor = self.cursor
+        elif event.unicode in "0123456789.-+eE":
+            self.insert_text(event.unicode)
+        return None
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.rect.collidepoint(event.pos):
+                self.active = True
+
+                self.old_text = self.text
+                idx = self.index_from_mouse_x(event.pos[0])
+                self.cursor = self.anchor = idx
+                self.dragging = True
+                self.blink_timer = 0.0
+
+                self.show_cursor = True
+                return "consume", self.key, None
+            if self.active:
+                self.active = self.dragging = False
+                return "commit", self.key, self.text
+        elif event.type == pygame.MOUSEMOTION and self.active and self.dragging:
+            self.cursor = self.index_from_mouse_x(event.pos[0])
+            return "consume", self.key, None
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and self.dragging:
+            self.dragging = False
+
+            return "consume", self.key, None
+        elif event.type == pygame.KEYDOWN and self.active:
+            result = self.consume_key(event)
+            return result if result is not None else ("consume", self.key, None)
+        return None
+
+    def update(self, dt):
+        if self.active:
+            self.blink_timer += dt
+            if self.blink_timer >= 0.42:
+                self.blink_timer = 0.0
+
+                self.show_cursor = not self.show_cursor
+        else:
+            self.show_cursor = False
+        self.invalid_flash = max(0.0, self.invalid_flash - dt * 3.0)
+
+    def draw(self, surface):
+        draw_text(surface, self.label,
+                  (self.rect.x, self.rect.y - 18), FONT_TINY, MUTED)
+        border = RED if self.invalid_flash > 0 else (
+            INPUT_ACTIVE if self.active else INPUT_BORDER
+        )
+        rounded_rect(surface, self.rect, INPUT_BG, 7, 1, border)
+
+        text_x, text_y = self.rect.x + 7, self.rect.y + 6
+        if self.active and self.has_selection():
+            a, b = self.selection_range()
+            sx = text_x + self.text_width(self.text[:a])
+            sw = self.text_width(self.text[a:b])
+            pygame.draw.rect(surface, SELECT_BG,
+                             (sx, self.rect.y + 4,
+                              max(1, sw), self.rect.h - 8),
+                             border_radius=3)
+        surface.blit(FONT_SMALL.render(self.text, True, TEXT), (text_x, text_y))
+
+        if self.active and self.show_cursor:
+            cx = text_x + self.text_width(self.text[:self.cursor])
+            pygame.draw.line(surface, (245, 250, 255),
+                             (cx, self.rect.y + 5),
+                             (cx, self.rect.bottom - 5), 1)
+        if self.unit:
+            draw_text(surface, self.unit,
+                      (self.rect.right + 5, self.rect.y + 6), FONT_TINY, MUTED)
