@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Visual Studio Code (local editor configuration)
+.vscode/
+
+# Built Visual Studio Code Extensions
+*.vsix

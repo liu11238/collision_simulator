@@ -7,15 +7,28 @@
 
 ## 运行
 
+本项目固定使用 Conda 的 `agent` 环境，不要安装到全局 `base` 环境。
+
 ```bash
-pip install -r requirements.txt
+conda activate agent
+conda install -c conda-forge pygame-ce=2.5.8
 python main.py
 ```
+
+如果当前终端不方便执行 `conda activate`，可以直接使用环境解释器：
+
+```bash
+D:\APPS\anaconda\envs\agent\python.exe -m pip install -r requirements.txt
+D:\APPS\anaconda\envs\agent\python.exe main.py
+```
+
+`agent` 使用 Python 3.14；项目依赖声明为 `pygame-ce`，它提供兼容的
+`import pygame` 接口，并有适用于该 Python 版本的 Windows 二进制包。
 
 也可以继续使用旧入口：
 
 ```bash
-python collision_simulator.py
+D:\APPS\anaconda\envs\agent\python.exe collision_simulator.py
 ```
 
 ## 目录结构
