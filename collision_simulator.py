@@ -8,74 +8,228 @@
 运行环境：Python 3 + pygame
 """
 from __future__ import annotations
+import math
 
-import math, os, pygame
-from dataclasses import dataclass
+import os
+import random
+import sys
+from dataclasses import dataclass, field
+from typing import Callable
+import pygame
 
-WIDTH, HEIGHT, SIM_H, FPS = (1240, 900, 590, 60)
-UI_H = HEIGHT - SIM_H
+WIDTH, HEIGHT = (1280, 960)
+FPS = 60
+UI_H = 340
+SIM_H = HEIGHT - UI_H
+BG_TOP = (6, 10, 22)
+BG_MID = (12, 20, 42)
 
-BG1, BG2 = ((8, 14, 28), (20, 32, 56))
-PANEL, CARD = ((20, 28, 46), (29, 40, 64))
+BG_BOTTOM = (18, 30, 58)
+PANEL = (16, 22, 40)
+PANEL_2 = (24, 33, 56)
+TEXT = (230, 238, 255)
+MUTED = (140, 155, 190)
+ACCENT = (80, 170, 255)
 
-TEXT, MUTED = ((235, 242, 255), (145, 160, 190))
-BLUE, ORANGE, YELLOW = ((75, 175, 250), (255, 155, 80), (240, 205, 80))
+ACCENT_2 = (255, 200, 70)
+ACCENT_3 = (120, 255, 180)
+ROD_COLOR = (240, 205, 80)
+ROD_EDGE = (255, 245, 160)
+ROD_GLOW = (255, 220, 60)
+BALL1_COLOR = (90, 210, 255)
 
-GREEN, RED = ((100, 235, 165), (255, 95, 95))
+BALL1_EDGE = (205, 245, 255)
+BALL1_GLOW = (55, 155, 255)
+BALL2_COLOR = (255, 155, 85)
+BALL2_EDGE = (255, 235, 195)
+BALL2_GLOW = (255, 125, 55)
+PLATFORM = (90, 105, 140)
+
+PLATFORM_TOP = (130, 148, 190)
+GREEN = (100, 230, 160)
+RED = (255, 90, 90)
+INPUT_BG = (12, 18, 34)
+INPUT_BORDER = (65, 80, 120)
+INPUT_ACTIVE = (80, 170, 255)
+
+SELECT_BG = (50, 100, 170)
 pygame.init()
-
+pygame.display.set_caption('弹性碰撞仿真器')
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
+particle_surf = pygame.Surface((WIDTH, SIM_H), pygame.SRCALPHA).convert_alpha()
 
-pygame.display.set_caption('弹性碰撞仿真器')
+trail_surf_1 = pygame.Surface((WIDTH, SIM_H), pygame.SRCALPHA).convert_alpha()
+trail_surf_2 = pygame.Surface((WIDTH, SIM_H), pygame.SRCALPHA).convert_alpha()
+glow_surf = pygame.Surface((WIDTH, SIM_H), pygame.SRCALPHA).convert_alpha()
+flash_surf = pygame.Surface((WIDTH, SIM_H), pygame.SRCALPHA).convert_alpha()
+particle_surf.set_alpha(220)
+trail_surf_1.set_alpha(190)
 
-def get_font(size=18, bold=False):
-    for p in ['C:\\Windows\\Fonts\\msyh.ttc', 'C:\\Windows\\Fonts\\simhei.ttf', '/System/Library/Fonts/PingFang.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf']:
-        if os.path.exists(p):
-            f = pygame.font.Font(p, size)
+trail_surf_2.set_alpha(190)
+glow_surf.set_alpha(210)
+flash_surf.set_alpha(220)
 
-            f.set_bold(bold)
-            return f
+def get_font(size: int, bold: bool=False):
+    win_dir = os.environ.get('WINDIR', 'C:\\Windows')
+    paths = [os.path.join(win_dir, 'Fonts', 'msyh.ttc'), os.path.join(win_dir, 'Fonts', 'msyhbd.ttc'), os.path.join(win_dir, 'Fonts', 'simhei.ttf'), os.path.join(win_dir, 'Fonts', 'simsun.ttc'), '/System/Library/Fonts/PingFang.ttc', '/System/Library/Fonts/STHeiti Light.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc', '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf']
+    for path in paths:
+        if os.path.exists(path):
+            try:
+                font = pygame.font.Font(path, size)
 
-    f = pygame.font.Font(None, size)
-    f.set_bold(bold)
+                font.set_bold(bold)
+                return font
+            except Exception:
+                pass
+    font = pygame.font.Font(None, size)
+    font.set_bold(bold)
+    return font
+FONT = get_font(20)
 
-    return f
-FONT, SMALL, TINY, BIG = (get_font(18), get_font(15), get_font(13), get_font(28, True))
-
+FONT_SMALL = get_font(16)
+FONT_TINY = get_font(14)
+FONT_BIG = get_font(27, True)
+FONT_TITLE = get_font(34, True)
+TITLE_LETTER_SPACING = 6
 
 def clamp(x, a, b):
     return max(a, min(b, x))
 
-def fmt(x):
-    if abs(x) >= 100:
-        return f'{x:.1f}'
 
-    if abs(x) >= 10:
+def lerp(a, b, t):
+    return a + (b - a) * t
+
+def lerp_color(c1, c2, t):
+    t = clamp(t, 0.0, 1.0)
+    return tuple((int(lerp(c1[i], c2[i], t)) for i in range(3)))
+
+def draw_text(surface, text, pos, font=FONT, color=TEXT, anchor='topleft'):
+    img = font.render(str(text), True, color)
+    rect = img.get_rect()
+
+    setattr(rect, anchor, pos)
+    surface.blit(img, rect)
+    return rect
+
+def draw_spaced_text(surface, text, pos, font=FONT, color=TEXT, spacing=0, anchor='topleft'):
+    """逐字绘制文本，并在相邻字符之间加入指定的横向间距。"""
+    text = str(text)
+    if not text:
+        rect = pygame.Rect(0, 0, 0, font.get_height())
+
+        setattr(rect, anchor, pos)
+        return rect
+    glyphs = [font.render(char, True, color) for char in text]
+    total_width = sum((glyph.get_width() for glyph in glyphs))
+    total_width += max(0, len(glyphs) - 1) * spacing
+    total_height = max(font.get_height(), *(glyph.get_height() for glyph in glyphs))
+
+    rect = pygame.Rect(0, 0, total_width, total_height)
+    setattr(rect, anchor, pos)
+    x = rect.x
+    for index, glyph in enumerate(glyphs):
+        y = rect.y + (total_height - glyph.get_height()) // 2
+        surface.blit(glyph, (x, y))
+        x += glyph.get_width()
+
+        if index < len(glyphs) - 1:
+            x += spacing
+    return rect
+
+def rounded_rect(surface, rect, color, radius=14, border=0, border_color=None):
+    pygame.draw.rect(surface, color, rect, border_radius=radius)
+    if border and border_color:
+        pygame.draw.rect(surface, border_color, rect, width=border, border_radius=radius)
+
+def draw_gradient_3(surface, rect, c_top, c_mid, c_bot):
+    x, y, w, h = rect
+    half = h // 2
+
+    for i in range(half):
+        c = lerp_color(c_top, c_mid, i / max(1, half - 1))
+        pygame.draw.line(surface, c, (x, y + i), (x + w, y + i))
+    for i in range(h - half):
+        c = lerp_color(c_mid, c_bot, i / max(1, h - half - 1))
+        pygame.draw.line(surface, c, (x, y + half + i), (x + w, y + half + i))
+
+def draw_horizontal_gradient_line(surface, x, y, w, c1, c2, height=1):
+    width = max(0, int(w))
+    for i in range(width):
+        c = lerp_color(c1, c2, i / max(1, width - 1))
+
+        pygame.draw.line(surface, c, (x + i, y), (x + i, y + height - 1))
+
+def draw_arrow(surface, start, end, color, width=3):
+    pygame.draw.line(surface, color, start, end, width)
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    ang = math.atan2(dy, dx)
+    size = 12
+
+    left = (end[0] - size * math.cos(ang - 0.45), end[1] - size * math.sin(ang - 0.45))
+    right = (end[0] - size * math.cos(ang + 0.45), end[1] - size * math.sin(ang + 0.45))
+    pygame.draw.polygon(surface, color, [end, left, right])
+
+def format_num(x):
+    if abs(x) >= 100:
         return f'{x:.2f}'
+    if abs(x) >= 10:
+        return f'{x:.3f}'
+    return f'{x:.4f}'
+
+
+def format_sig3(x):
+    """历史版本数值显示。最终第4版才统一为 3 位有效数字。"""
+    try:
+        x = float(x)
+    except Exception:
+        return str(x)
+    if not math.isfinite(x):
+        return str(x)
     return f'{x:.3f}'
 
+def safe_float(s, fallback=None):
+    try:
+        value = float(s)
+        return value if math.isfinite(value) else fallback
+    except Exception:
+        return fallback
 
-def draw_text(s, pos, f=FONT, c=TEXT, anchor='topleft'):
-    im = f.render(str(s), True, c)
-    r = im.get_rect()
 
-    setattr(r, anchor, pos)
-    screen.blit(im, r)
+def create_static_background():
+    bg = pygame.Surface((WIDTH, SIM_H)).convert()
+    draw_gradient_3(bg, (0, 0, WIDTH, SIM_H), BG_TOP, BG_MID, BG_BOTTOM)
+    stars = pygame.Surface((WIDTH, SIM_H), pygame.SRCALPHA).convert_alpha()
+    rng = random.Random(42)
+    for _ in range(130):
+        x = rng.randint(0, WIDTH - 1)
+        y = rng.randint(0, SIM_H - 1)
 
-    return r
+        a = rng.randint(35, 135)
+        r = rng.randint(1, 2)
+        pygame.draw.circle(stars, (200, 215, 255, a), (x, y), r)
+    bg.blit(stars, (0, 0))
+    soft = pygame.Surface((WIDTH, SIM_H), pygame.SRCALPHA).convert_alpha()
+    for r, a in [(280, 12), (195, 18), (120, 26), (65, 36)]:
+        pygame.draw.circle(soft, (70, 130, 255, a), (1010, 110), r)
 
-def gradient_background():
-    for y in range(SIM_H):
-        t = y / max(1, SIM_H - 1)
-
-        c = tuple((int(BG1[i] * (1 - t) + BG2[i] * t) for i in range(3)))
-        pygame.draw.line(screen, c, (0, y), (WIDTH, y))
-
+    for r, a in [(170, 10), (95, 16)]:
+        pygame.draw.circle(soft, (255, 125, 90, a), (180, SIM_H - 85), r)
+    bg.blit(soft, (0, 0))
+    grid = pygame.Surface((WIDTH, SIM_H), pygame.SRCALPHA).convert_alpha()
     for x in range(0, WIDTH, 50):
-        pygame.draw.line(screen, (33, 47, 72), (x, 0), (x, SIM_H), 1)
+        pygame.draw.line(grid, (255, 255, 255, 8), (x, 0), (x, SIM_H))
     for y in range(0, SIM_H, 50):
-        pygame.draw.line(screen, (33, 47, 72), (0, y), (WIDTH, y), 1)
+        pygame.draw.line(grid, (255, 255, 255, 7), (0, y), (WIDTH, y))
+
+    for x in range(0, WIDTH, 100):
+        pygame.draw.line(grid, (255, 255, 255, 14), (x, 0), (x, SIM_H))
+    for y in range(0, SIM_H, 100):
+        pygame.draw.line(grid, (255, 255, 255, 12), (0, y), (WIDTH, y))
+    bg.blit(grid, (0, 0))
+    return bg
+STATIC_BG = create_static_background()
 
 @dataclass
 class Slider:
@@ -83,918 +237,1264 @@ class Slider:
 
     x: int
     y: int
-
     w: int
-    lo: float
-
-    hi: float
+    vmin: float
+    vmax: float
     value: float
 
     unit: str = ''
-    drag: bool = False
+    decimals: int = 2
+    dragging: bool = False
+
+    def knob_x(self):
+        t = (self.value - self.vmin) / max(1e-12, self.vmax - self.vmin)
+        return int(self.x + clamp(t, 0.0, 1.0) * self.w)
+
+    def set_value(self, value):
+        self.value = clamp(float(value), self.vmin, self.vmax)
 
 
-    def knob(self):
-        return int(self.x + (self.value - self.lo) / max(1e-12, self.hi - self.lo) * self.w)
+    def set_from_mouse(self, mx):
+        t = clamp((mx - self.x) / self.w, 0.0, 1.0)
+        self.value = self.vmin + t * (self.vmax - self.vmin)
 
-    def set_mouse(self, mx):
-        self.value = self.lo + clamp((mx - self.x) / self.w, 0, 1) * (self.hi - self.lo)
+    def handle_event(self, event):
+        changed = False
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mx, my = event.pos
+            kx = self.knob_x()
+            hit_knob = abs(mx - kx) < 16 and abs(my - self.y) < 18
+
+            hit_track = self.x <= mx <= self.x + self.w and abs(my - self.y) < 12
+            if hit_knob or hit_track:
+                self.dragging = True
+                self.set_from_mouse(mx)
+                changed = True
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.dragging = False
+        elif event.type == pygame.MOUSEMOTION and self.dragging:
+            self.set_from_mouse(event.pos[0])
+            changed = True
+        return changed
 
 
-    def event(self, e):
-        if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and (self.x - 10 <= e.pos[0] <= self.x + self.w + 10) and (abs(e.pos[1] - self.y) < 15):
-            self.drag = True
-            self.set_mouse(e.pos[0])
+    def draw(self, surface, value_text=None):
+        pygame.draw.line(surface, (40, 50, 80), (self.x, self.y + 2), (self.x + self.w, self.y + 2), 8)
+        pygame.draw.line(surface, (55, 68, 105), (self.x, self.y), (self.x + self.w, self.y), 6)
+        kx = self.knob_x()
+        if kx > self.x:
+            pygame.draw.line(surface, ACCENT, (self.x, self.y), (kx, self.y), 6)
+        for i in range(6):
+            tx = self.x + i * self.w / 5
+            pygame.draw.line(surface, (80, 95, 135), (tx, self.y - 6), (tx, self.y + 6), 1)
 
-            return True
-        if e.type == pygame.MOUSEBUTTONUP and e.button == 1:
-            self.drag = False
+        pygame.draw.circle(surface, (4, 8, 18), (kx + 2, self.y + 3), 14)
+        pygame.draw.circle(surface, (50, 80, 130), (kx, self.y), 14)
+        pygame.draw.circle(surface, ACCENT, (kx, self.y), 12)
+        pygame.draw.circle(surface, (140, 200, 255), (kx, self.y), 8)
+        pygame.draw.circle(surface, (220, 245, 255), (kx - 4, self.y - 4), 4)
+        draw_text(surface, self.label, (self.x, self.y - 30), FONT_SMALL, MUTED)
 
-        if e.type == pygame.MOUSEMOTION and self.drag:
-            self.set_mouse(e.pos[0])
-            return True
+        if value_text is None:
+            value_text = f'{format_sig3(self.value)}{self.unit}'
+        draw_text(surface, value_text, (self.x + self.w, self.y - 30), FONT_SMALL, TEXT, anchor='topright')
 
-        return False
+@dataclass
+class Button:
+    text: str
+    rect: pygame.Rect
+    _hover: bool = field(default=False, init=False, repr=False)
 
-    def draw(self):
-        pygame.draw.line(screen, (55, 68, 96), (self.x, self.y), (self.x + self.w, self.y), 6)
+    def draw(self, surface, active=False):
+        self._hover = self.rect.collidepoint(pygame.mouse.get_pos())
 
-        k = self.knob()
-        pygame.draw.line(screen, BLUE, (self.x, self.y), (k, self.y), 6)
+        if active:
+            bg, border = ((45, 88, 145), (100, 160, 240))
+        elif self._hover:
+            bg, border = ((38, 52, 90), (90, 115, 165))
+        else:
+            bg, border = ((28, 38, 66), (65, 82, 125))
+        rounded_rect(surface, self.rect, bg, 12, 1, border)
+        pygame.draw.rect(surface, (230, 240, 255), (self.rect.x + 5, self.rect.y + 2, self.rect.w - 10, 2), border_radius=2)
+        draw_text(surface, self.text, self.rect.center, FONT_SMALL, TEXT, anchor='center')
 
-        pygame.draw.circle(screen, BLUE, (k, self.y), 11)
-        draw_text(self.label, (self.x, self.y - 28), SMALL, MUTED)
-
-        draw_text(fmt(self.value) + self.unit, (self.x + self.w, self.y - 28), SMALL, TEXT, 'topright')
+    def clicked(self, event):
+        return event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.rect.collidepoint(event.pos)
 
 class InputBox:
 
-    def __init__(self, key, x, y, w, value):
+    def __init__(self, key, label, x, y, w, value, unit=''):
         self.key = key
 
+        self.label = label
         self.rect = pygame.Rect(x, y, w, 28)
-        self.text = fmt(value)
-
+        self.unit = unit
+        self.text = self.format_value(value)
+        self.old_text = self.text
         self.active = False
 
-    def set(self, v):
+        self.cursor = len(self.text)
+        self.anchor = self.cursor
+        self.dragging = False
+        self.blink_timer = 0.0
+        self.show_cursor = True
+        self.invalid_flash = 0.0
+
+
+    def format_value(self, value):
+        if self.key in ('anim_speed', 'speed'):
+            return f'{value:.2f}'
+        return format_num(value)
+
+    def set_text_value(self, value):
         if not self.active:
-            self.text = fmt(v)
+            self.text = self.format_value(value)
+            self.cursor = len(self.text)
+            self.anchor = self.cursor
+
+            self.old_text = self.text
+
+    def has_selection(self):
+        return self.cursor != self.anchor
+
+    def selection_range(self):
+        return (min(self.cursor, self.anchor), max(self.cursor, self.anchor))
+
+    def text_width(self, s):
+        return FONT_SMALL.size(s)[0]
+
+    def index_from_mouse_x(self, mx):
+        rel_x = max(0, mx - (self.rect.x + 7))
+        best, best_dist = (0, 10 ** 9)
+
+        for i in range(len(self.text) + 1):
+            dist = abs(self.text_width(self.text[:i]) - rel_x)
+            if dist < best_dist:
+                best_dist, best = (dist, i)
+        return best
+
+    def delete_selection(self):
+        if not self.has_selection():
+            return False
+        a, b = self.selection_range()
+        self.text = self.text[:a] + self.text[b:]
+
+        self.cursor = self.anchor = a
+        return True
+
+    def insert_text(self, s):
+        self.delete_selection()
+        self.text = self.text[:self.cursor] + s + self.text[self.cursor:]
+        self.cursor += len(s)
+        self.anchor = self.cursor
 
 
-    def event(self, e):
-        if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-            if self.rect.collidepoint(e.pos):
-                self.active = True
-                return 'focus'
+    def move_cursor(self, new_pos, selecting=False):
+        self.cursor = int(clamp(new_pos, 0, len(self.text)))
+        if not selecting:
+            self.anchor = self.cursor
 
-            if self.active:
-                self.active = False
-                return 'commit'
-        if e.type == pygame.KEYDOWN and self.active:
-            if e.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                self.active = False
+    def consume_key(self, event):
+        ctrl = bool(event.mod & pygame.KMOD_CTRL)
+        shift = bool(event.mod & pygame.KMOD_SHIFT)
+        if ctrl and event.key == pygame.K_a:
+            self.anchor, self.cursor = (0, len(self.text))
+            return None
 
-                return 'commit'
-            if e.key == pygame.K_BACKSPACE:
-                self.text = self.text[:-1]
-            elif e.unicode in '0123456789.-+eE':
-                self.text += e.unicode
+        if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            self.active = self.dragging = False
+            return ('commit', self.key, self.text)
+        if event.key == pygame.K_ESCAPE:
+            self.text = self.old_text
+            self.cursor = self.anchor = len(self.text)
+            self.active = self.dragging = False
+            return ('cancel', self.key, None)
 
-            return 'edit'
+        if event.key == pygame.K_LEFT:
+            self.move_cursor(self.cursor - 1, shift)
+        elif event.key == pygame.K_RIGHT:
+            self.move_cursor(self.cursor + 1, shift)
+        elif event.key == pygame.K_HOME:
+            self.move_cursor(0, shift)
+        elif event.key == pygame.K_END:
+            self.move_cursor(len(self.text), shift)
+        elif event.key == pygame.K_BACKSPACE:
+            if not self.delete_selection() and self.cursor > 0:
+                self.text = self.text[:self.cursor - 1] + self.text[self.cursor:]
+                self.cursor -= 1
+                self.anchor = self.cursor
+        elif event.key == pygame.K_DELETE:
+            if not self.delete_selection() and self.cursor < len(self.text):
+                self.text = self.text[:self.cursor] + self.text[self.cursor + 1:]
+                self.anchor = self.cursor
+        elif event.unicode in '0123456789.-+eE':
+            self.insert_text(event.unicode)
         return None
 
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.rect.collidepoint(event.pos):
+                self.active = True
 
-    def draw(self):
-        pygame.draw.rect(screen, (11, 17, 30), self.rect, border_radius=5)
-        pygame.draw.rect(screen, BLUE if self.active else (70, 82, 112), self.rect, 1, border_radius=5)
+                self.old_text = self.text
+                idx = self.index_from_mouse_x(event.pos[0])
+                self.cursor = self.anchor = idx
+                self.dragging = True
+                self.blink_timer = 0.0
+                self.show_cursor = True
 
-        draw_text(self.text, (self.rect.x + 6, self.rect.y + 5), SMALL, TEXT)
+                return ('consume', self.key, None)
+            if self.active:
+                self.active = self.dragging = False
+                return ('commit', self.key, self.text)
+        elif event.type == pygame.MOUSEMOTION and self.active and self.dragging:
+            self.cursor = self.index_from_mouse_x(event.pos[0])
+            return ('consume', self.key, None)
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and self.dragging:
+            self.dragging = False
+            return ('consume', self.key, None)
+        elif event.type == pygame.KEYDOWN and self.active:
+            result = self.consume_key(event)
+            return result if result is not None else ('consume', self.key, None)
 
-class Button:
+        return None
 
-    def __init__(self, label, rect):
-        self.label = label
-
-        self.rect = pygame.Rect(rect)
-
-    def clicked(self, e):
-        return e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and self.rect.collidepoint(e.pos)
-
-
-    def draw(self, active=False):
-        pygame.draw.rect(screen, (48, 92, 145) if active else (36, 47, 70), self.rect, border_radius=9)
-        pygame.draw.rect(screen, (80, 100, 140), self.rect, 1, border_radius=9)
-
-        draw_text(self.label, self.rect.center, SMALL, TEXT, 'center')
-
-class BaseModel:
-    title = ''
-
-
-    def __init__(self):
-        self.sliders = {}
-        self.inputs = {}
-
-        self.last = None
-        self.running = False
-
-        self.t = 0
-        self.build()
-
-        self.reset()
-        self.sync()
-
-
-    def add(self, key, label, x, y, lo, hi, val, unit=''):
-        self.sliders[key] = Slider(label, x, y, 280, lo, hi, val, unit)
-        self.inputs[key] = InputBox(key, x + 290, y - 8, 82, val)
-
-
-    def sync(self):
-        for k, s in self.sliders.items():
-            self.inputs[k].set(s.value)
-
-    def controls_event(self, e):
-        changed = False
-
-        for k, b in self.inputs.items():
-            r = b.event(e)
-            if r == 'commit':
-                try:
-                    self.sliders[k].value = clamp(float(b.text), self.sliders[k].lo, self.sliders[k].hi)
-
-                    changed = True
-                except:
-                    pass
-
-        for s in self.sliders.values():
-            changed |= s.event(e)
-        if changed:
-            self.sync()
-
-            self.reset()
-
-    def draw_controls(self):
-        for s in self.sliders.values():
-            s.draw()
-        for b in self.inputs.values():
-            b.draw()
-
-
-    def draw_header(self):
-        draw_text(self.title, (30, 24), BIG)
-        draw_text(f"状态：{('运行中' if self.running else '待开始')}    t={self.t:.3f}s", (32, 64), SMALL, MUTED)
-
-
-    def formula(self):
-        return []
-
-    def current(self):
-        return []
-
-
-    def draw_cards(self):
-        r = pygame.Rect(825, 120, 385, 310)
-        pygame.draw.rect(screen, (12, 19, 34), r, border_radius=14)
-
-        pygame.draw.rect(screen, (54, 70, 105), r, 1, border_radius=14)
-        draw_text('实时物理量', (r.x + 18, r.y + 16), FONT, TEXT)
-
-        y = r.y + 52
-        for line in self.current():
-            draw_text(line, (r.x + 18, y), SMALL, MUTED)
-
-            y += 24
-        y += 8
-
-        draw_text('碰撞结果', (r.x + 18, y), FONT, YELLOW)
-        y += 30
-
-        if self.last:
-            for line in self.last:
-                draw_text(line, (r.x + 18, y), SMALL, GREEN)
-                y += 22
+    def update(self, dt):
+        if self.active:
+            self.blink_timer += dt
+            if self.blink_timer >= 0.42:
+                self.blink_timer = 0.0
+                self.show_cursor = not self.show_cursor
         else:
-            draw_text('尚未发生碰撞', (r.x + 18, y), SMALL, MUTED)
-
-        fr = pygame.Rect(825, 450, 385, 92)
-        pygame.draw.rect(screen, (18, 26, 44), fr, border_radius=10)
-
-        y = fr.y + 12
-        for line in self.formula():
-            draw_text(line, (fr.x + 14, y), TINY, YELLOW)
-
-            y += 25
-
-class TwoBalls(BaseModel):
-    title = '1：两自由质点弹性碰撞仿真'
-
-
-    def build(self):
-        self.add('m1', '质点1质量 m1', 35, 650, 0.2, 5, 1, ' kg')
-        self.add('m2', '质点2质量 m2', 35, 720, 0.2, 5, 2, ' kg')
-
-        self.add('u1', '质点1初速度 v1', 430, 650, -6, 6, 3, ' m/s')
-        self.add('u2', '质点2初速度 v2', 430, 720, -6, 6, -1, ' m/s')
-
-        self.add('speed', '动画速度', 825, 650, 0.2, 2.5, 1, 'x')
-
-    def reset(self):
-        self.running = False
-
-        self.t = 0
-        self.hit = False
-
-        self.x1 = -2.5
-        self.x2 = 2.5
-        self.v1 = self.sliders['u1'].value
-
-        self.v2 = self.sliders['u2'].value
-        self.last = None
-
-
-    def start(self):
-        self.running = not self.running
-
-    def snap(self):
-        self.x1 = -0.23
-
-        self.x2 = 0.23
-        self.v1 = self.sliders['u1'].value
-
-        self.v2 = self.sliders['u2'].value
-        self.do_collision()
-
-        self.running = True
-
-    def do_collision(self):
-        m1, m2 = (self.sliders['m1'].value, self.sliders['m2'].value)
-
-        u1, u2 = (self.v1, self.v2)
-        p0 = m1 * u1 + m2 * u2
-
-        e0 = 0.5 * m1 * u1 * u1 + 0.5 * m2 * u2 * u2
-        self.v1 = ((m1 - m2) * u1 + 2 * m2 * u2) / (m1 + m2)
-
-        self.v2 = (2 * m1 * u1 + (m2 - m1) * u2) / (m1 + m2)
-        self.hit = True
-
-        p1 = m1 * self.v1 + m2 * self.v2
-        e1 = 0.5 * m1 * self.v1 ** 2 + 0.5 * m2 * self.v2 ** 2
-
-        self.last = [f"v1'={fmt(self.v1)} m/s", f"v2'={fmt(self.v2)} m/s", f'Δp={fmt(p1 - p0)}', f'ΔE={fmt(e1 - e0)} J']
-
-    def step(self, dt):
-        if not self.running:
-            return
-
-        dt *= self.sliders['speed'].value
-        self.t += dt
-
-        old = self.x2 - self.x1
-        self.x1 += self.v1 * dt
-
-        self.x2 += self.v2 * dt
-        if not self.hit and self.v1 > self.v2 and (old > 0.46) and (self.x2 - self.x1 <= 0.46):
-            self.do_collision()
-
-
-    def formula(self):
-        return ['p=m1*v1+m2*v2', 'Ek=(1/2)m1v1^2+(1/2)m2v2^2']
-
-    def current(self):
-        return [f'x1={fmt(self.x1)} m', f'x2={fmt(self.x2)} m', f'v1={fmt(self.v1)} m/s', f'v2={fmt(self.v2)} m/s']
-
-
-    def draw_scene(self):
-        scale = 105
-        cx = 405
-
-        y = 315
-        pygame.draw.line(screen, (100, 112, 135), (45, y + 35), (790, y + 35), 3)
-
-        p1 = (int(cx + self.x1 * scale), y)
-        p2 = (int(cx + self.x2 * scale), y)
-        pygame.draw.circle(screen, BLUE, p1, 22)
-
-        pygame.draw.circle(screen, ORANGE, p2, 22)
-        draw_text('1', p1, SMALL, (10, 20, 30), 'center')
-
-        draw_text('2', p2, SMALL, (35, 20, 10), 'center')
-
-class BallRod(BaseModel):
-    title = '2：质点-定轴细杆碰撞仿真'
-
-
-    def build(self):
-        self.add('m', '质点质量 m', 35, 650, 0.2, 5, 1, ' kg')
-        self.add('M', '杆质量 M', 35, 720, 0.2, 8, 3, ' kg')
-
-        self.add('L', '杆长 L', 430, 650, 0.25, 2, 1.2, ' m')
-        self.add('ratio', '碰撞位置 h/L', 430, 720, 0.1, 0.95, 0.65, '')
-
-        self.add('u', '质点初速度 u', 825, 650, 0, 8, 4, ' m/s')
-        self.add('speed', '动画速度', 825, 720, 0.2, 2.5, 1, 'x')
-
-
-    def reset(self):
-        self.running = False
-        self.t = 0
-
-        self.hit = False
-        self.theta = 0
-
-        self.w = 0
-        self.ball_x = -2
-
-        self.ball_v = self.sliders['u'].value
-        self.last = None
-
-
-    def start(self):
-        self.running = not self.running
-
-    def do_collision(self):
-        m, M, L = (self.sliders['m'].value, self.sliders['M'].value, self.sliders['L'].value)
-
-        h = self.sliders['ratio'].value * L
-        I = M * L * L / 3
-
-        u = self.ball_v
-        den = I + m * h * h
-
-        L0 = m * h * u
-        E0 = 0.5 * m * u * u
-
-        self.ball_v = (m * h * h - I) * u / den
-        self.w = 2 * m * h * u / den
-
-        self.hit = True
-        L1 = I * self.w + m * h * self.ball_v
-
-        E1 = 0.5 * I * self.w * self.w + 0.5 * m * self.ball_v * self.ball_v
-        self.last = [f"v'={fmt(self.ball_v)} m/s", f'w={fmt(self.w)} rad/s', f'ΔL={fmt(L1 - L0)}', f'ΔE={fmt(E1 - E0)} J']
-
-
-    def snap(self):
-        self.ball_x = -0.08
-        self.ball_v = self.sliders['u'].value
-        self.do_collision()
-
-        self.running = True
-
-    def step(self, dt):
-        if not self.running:
-            return
-
-        dt *= self.sliders['speed'].value
-        self.t += dt
-
-        old = self.ball_x
-        self.ball_x += self.ball_v * dt
-
-        if not self.hit and self.ball_v > 0 and (old < -0.08 <= self.ball_x):
-            self.ball_x = -0.08
-            self.do_collision()
-
-        if self.hit:
-            self.theta += self.w * dt
-
-    def formula(self):
-        return ['I=(1/3)ML^2', 'L_about_pivot=I*w+m*h*v']
-
-
-    def current(self):
-        L = self.sliders['L'].value
-        h = self.sliders['ratio'].value * L
-
-        I = self.sliders['M'].value * L * L / 3
-        return [f'h={fmt(h)} m', f'I={fmt(I)} kg*m^2', f'v={fmt(self.ball_v)} m/s', f'w={fmt(self.w)} rad/s']
-
-
-    def draw_scene(self):
-        L = self.sliders['L'].value
-        h = self.sliders['ratio'].value * L
-
-        scale = min(300, 350 / max(0.3, L))
-        pivot = (690, 165)
-
-        end = (int(pivot[0] + L * math.sin(self.theta) * scale), int(pivot[1] + L * math.cos(self.theta) * scale))
-        pygame.draw.line(screen, YELLOW, pivot, end, 8)
-
-        pygame.draw.circle(screen, BLUE, pivot, 11)
-        by = int(pivot[1] + h * scale)
-
-        bx = int(pivot[0] + self.ball_x * scale)
-        pygame.draw.circle(screen, BLUE, (bx, by), 20)
-
-        draw_text(f'w={fmt(self.w)}', (pivot[0] + 20, pivot[1] - 16), SMALL, GREEN)
-
-
-class ValueHistory:
-    def __init__(self, limit=120):
-        self.limit = max(2, int(limit))
-
-        self.values = []
-
-    def clear(self):
-        self.values.clear()
-
-
-    def append(self, value):
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            return
-        if not math.isfinite(value):
-            return
-
-        self.values.append(value)
-        if len(self.values) > self.limit:
-            del self.values[0]
-
-    def last(self, default=0.0):
-        return self.values[-1] if self.values else default
-
-
-    def minimum(self, default=0.0):
-        return min(self.values) if self.values else default
-
-    def maximum(self, default=0.0):
-        return max(self.values) if self.values else default
-
-
-
-class TextCache:
-    def __init__(self):
-        self._cache = {}
-
-    def clear(self):
-        self._cache.clear()
-
-
-    def render(self, font, value, color):
-        key = (id(font), str(value), tuple(color))
-        image = self._cache.get(key)
-
-        if image is None:
-            image = font.render(str(value), True, color)
-            self._cache[key] = image
-
-        return image
-
-
-def map_range(value, a0, a1, b0, b1):
-    if abs(a1 - a0) < 1e-12:
-        return 0.5 * (b0 + b1)
-
-    t = (value - a0) / (a1 - a0)
-    return b0 + t * (b1 - b0)
-
-
-
-def nice_step(span, divisions=5):
-    span = abs(float(span))
-    if span <= 0.0:
-        return 1.0
-
-    raw = span / max(1, divisions)
-    power = 10 ** math.floor(math.log10(raw))
-
-    scaled = raw / power
-    if scaled <= 1:
-        factor = 1
-    elif scaled <= 2:
-        factor = 2
-    elif scaled <= 5:
-        factor = 5
-    else:
-        factor = 10
-
-    return factor * power
-
-
-def ticks_for_range(lo, hi, divisions=5):
-    if hi < lo:
-        lo, hi = hi, lo
-
-    step = nice_step(hi - lo, divisions)
-    value = math.ceil(lo / step) * step
-
-    ticks = []
-    for _ in range(100):
-        if value > hi + step * 1e-9:
-            break
-
-        ticks.append(value)
-        value += step
-
-    return ticks
-
-
-def draw_axis(surface, rect, lo, hi, color=(76, 92, 120)):
-    y = rect.centery
-
-    pygame.draw.line(surface, color, (rect.left, y), (rect.right, y), 1)
-    for value in ticks_for_range(lo, hi):
-        x = int(map_range(value, lo, hi, rect.left, rect.right))
-
-        pygame.draw.line(surface, color, (x, y - 4), (x, y + 4), 1)
-
-
-def draw_value_bar(surface, rect, value, lo, hi, fill=(75, 175, 250)):
-    pygame.draw.rect(surface, (29, 38, 58), rect, border_radius=4)
-
-    if hi <= lo:
-        return
-    t = clamp((value - lo) / (hi - lo), 0.0, 1.0)
-    filled = rect.copy()
-
-    filled.width = int(rect.width * t)
-    if filled.width:
-        pygame.draw.rect(surface, fill, filled, border_radius=4)
-
-
-
-def momentum_1d(mass, velocity):
-    return float(mass) * float(velocity)
-
-
-def kinetic_energy_1d(mass, velocity):
-    velocity = float(velocity)
-
-    return 0.5 * float(mass) * velocity * velocity
-
-
-def ball_ball_invariants(m1, m2, v1, v2):
-    p = momentum_1d(m1, v1) + momentum_1d(m2, v2)
-
-    e = kinetic_energy_1d(m1, v1) + kinetic_energy_1d(m2, v2)
-    return p, e
-
-
-
-def rod_inertia(mass, length):
-    return float(mass) * float(length) * float(length) / 3.0
-
-
-def angular_momentum_ball(mass, radius, speed):
-    return float(mass) * float(radius) * float(speed)
-
-
-
-def angular_momentum_rod(inertia, omega):
-    return float(inertia) * float(omega)
-
-
-def energy_rod(inertia, omega):
-    omega = float(omega)
-
-    return 0.5 * float(inertia) * omega * omega
-
-
-def almost_equal(a, b, rel_tol=1e-8, abs_tol=1e-10):
-    a = float(a)
-
-    b = float(b)
-    return abs(a - b) <= max(abs_tol, rel_tol * max(abs(a), abs(b)))
-
-
-
-class FrameTimer:
-    def __init__(self, smoothing=0.9):
-        self.smoothing = clamp(float(smoothing), 0.0, 0.999)
-        self.filtered_dt = 1.0 / 60.0
-
-        self.frames = 0
-
-    def push(self, dt):
-        dt = max(0.0, float(dt))
-
-        self.filtered_dt = self.filtered_dt * self.smoothing + dt * (1.0 - self.smoothing)
-        self.frames += 1
-
+            self.show_cursor = False
+        self.invalid_flash = max(0.0, self.invalid_flash - dt * 3.0)
+
+    def draw(self, surface):
+        draw_text(surface, self.label, (self.rect.x, self.rect.y - 18), FONT_TINY, MUTED)
+
+        border = RED if self.invalid_flash > 0 else INPUT_ACTIVE if self.active else INPUT_BORDER
+        rounded_rect(surface, self.rect, INPUT_BG, 7, 1, border)
+        text_x, text_y = (self.rect.x + 7, self.rect.y + 6)
+        if self.active and self.has_selection():
+            a, b = self.selection_range()
+            sx = text_x + self.text_width(self.text[:a])
+            sw = self.text_width(self.text[a:b])
+
+            pygame.draw.rect(surface, SELECT_BG, (sx, self.rect.y + 4, max(1, sw), self.rect.h - 8), border_radius=3)
+        surface.blit(FONT_SMALL.render(self.text, True, TEXT), (text_x, text_y))
+        if self.active and self.show_cursor:
+            cx = text_x + self.text_width(self.text[:self.cursor])
+            pygame.draw.line(surface, (245, 250, 255), (cx, self.rect.y + 5), (cx, self.rect.bottom - 5), 1)
+        if self.unit:
+            draw_text(surface, self.unit, (self.rect.right + 5, self.rect.y + 6), FONT_TINY, MUTED)
+
+class Particle:
+    __slots__ = ('kind', 'x', 'y', 'vx', 'vy', 'life', 'max_life', 'size', 'color_start', 'color_end', 'trail', 'max_trail', 'angle', 'spin')
+
+
+    def __init__(self, kind, x, y, vx, vy, life, size=3.0, color_start=(255, 240, 160), color_end=(255, 80, 20), trail_len=0, angle=0.0, spin=0.0):
+        self.kind = kind
+        self.x, self.y = (x, y)
+        self.vx, self.vy = (vx, vy)
+        self.life = self.max_life = life
+        self.size = size
+
+        self.color_start, self.color_end = (color_start, color_end)
+        self.trail = []
+        self.max_trail = trail_len
+        self.angle, self.spin = (angle, spin)
 
     @property
-    def fps(self):
-        if self.filtered_dt <= 1e-12:
-            return 0.0
-        return 1.0 / self.filtered_dt
+    def t(self):
+        return clamp(self.life / max(1e-09, self.max_life), 0.0, 1.0)
 
+    def step(self, dt, gravity=0.0):
+        if self.max_trail > 0:
+            self.trail.append((self.x, self.y))
 
+            if len(self.trail) > self.max_trail:
+                self.trail.pop(0)
+        self.vx *= max(0.0, 1.0 - 0.6 * dt)
+        self.vy = self.vy * max(0.0, 1.0 - 0.25 * dt) + gravity * dt
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+        self.angle += self.spin * dt
 
-class KeyLatch:
-    def __init__(self):
-        self.down = set()
+        self.life -= dt
 
-    def event(self, event):
-        if event.type == pygame.KEYDOWN:
-            first = event.key not in self.down
+    def draw(self, surface, world_to_screen: Callable[[float, float], tuple[int, int]], streak_scale=8.0):
+        sx, sy = world_to_screen(self.x, self.y)
+        if sx < -120 or sx > WIDTH + 120 or sy < -120 or (sy > SIM_H + 120):
+            return
+        t = self.t
+        alpha = int(255 * t)
+        color = lerp_color(self.color_end, self.color_start, t)
 
-            self.down.add(event.key)
-            return first
+        size = max(1.0, self.size * t)
+        if self.kind == 'spark':
+            for i in range(len(self.trail) - 1):
+                p1 = world_to_screen(*self.trail[i])
+                p2 = world_to_screen(*self.trail[i + 1])
+                a = int(alpha * (i + 1) / max(1, len(self.trail)) * 0.65)
+                pygame.draw.line(surface, (*color, a), p1, p2, max(1, int(size * 0.6)))
+            pygame.draw.circle(surface, (*color, alpha), (sx, sy), max(1, int(size)))
+        elif self.kind == 'ember':
+            r = max(2, int(size * 1.4))
 
-        if event.type == pygame.KEYUP:
-            self.down.discard(event.key)
-        return False
+            pygame.draw.circle(surface, (*color, max(0, alpha - 90)), (sx, sy), r + 3)
+            pygame.draw.circle(surface, (*color, alpha), (sx, sy), r)
+        elif self.kind == 'debris':
+            half = max(1, int(size))
+            ca, sa = (math.cos(self.angle), math.sin(self.angle))
+            pts = []
+            for px, py in [(-half, -half), (half, -half), (half, half), (-half, half)]:
+                pts.append((int(sx + px * ca - py * sa), int(sy + px * sa + py * ca)))
+            pygame.draw.polygon(surface, (*color, alpha), pts)
+        elif self.kind == 'streak':
+            speed = math.hypot(self.vx, self.vy)
 
+            if speed > 0.01:
+                nx, ny = (self.vx / speed, self.vy / speed)
+                tail = clamp(speed * streak_scale, 4, 48)
+                end = (sx - int(nx * tail), sy - int(ny * tail))
+                pygame.draw.line(surface, (*color, alpha), (sx, sy), end, max(1, int(size)))
 
-    def held(self, key):
-        return key in self.down
+class ShockWave:
+    __slots__ = ('x', 'y', 'r', 'max_r', 'life', 'max_life', 'color', 'width')
 
+    def __init__(self, x, y, max_r, life, color, width=2):
+        self.x, self.y = (x, y)
 
-class Notice:
-    def __init__(self):
-        self.text = ''
-        self.time_left = 0.0
-
-
-    def show(self, value, duration=1.6):
-        self.text = str(value)
-        self.time_left = max(0.0, float(duration))
-
+        self.r = 0.0
+        self.max_r = max_r
+        self.life = self.max_life = life
+        self.color = color
+        self.width = width
 
     def step(self, dt):
-        self.time_left = max(0.0, self.time_left - max(0.0, dt))
+        self.life -= dt
 
-    def draw(self, surface, font, pos):
-        if self.time_left <= 0.0 or not self.text:
+        self.r = self.max_r * (1.0 - clamp(self.life / self.max_life, 0.0, 1.0))
+
+    def draw(self, surface, world_to_screen, scale):
+        t = clamp(self.life / max(1e-09, self.max_life), 0.0, 1.0)
+        alpha = int(200 * t * t)
+        sx, sy = world_to_screen(self.x, self.y)
+        r = max(1, int(self.r * scale))
+        pygame.draw.circle(surface, (*self.color, alpha), (sx, sy), r, self.width)
+
+        if r > 7:
+            pygame.draw.circle(surface, (255, 255, 255, alpha // 3), (sx, sy), r - 3, 1)
+
+def spawn_impact_particles(particles, shockwaves, x, y, strength, direction=1.0, vertical_bias=0.0, symmetric=False):
+    strength = clamp(abs(strength), 0.8, 14.0)
+    root = math.sqrt(strength)
+    for _ in range(52):
+        side = random.choice((-1.0, 1.0)) if symmetric else direction
+        ang = random.uniform(-0.95, 0.95)
+        speed = random.uniform(0.7, 2.5) * root
+
+        vx = side * abs(math.cos(ang)) * speed
+        vy = math.sin(ang) * speed + vertical_bias
+        particles.append(Particle('spark', x, y, vx, vy, random.uniform(0.28, 0.72), size=random.uniform(2.0, 4.6), color_start=lerp_color((255, 255, 225), (255, 185, 45), random.random()), color_end=lerp_color((255, 100, 20), (120, 35, 12), random.random()), trail_len=random.randint(4, 9)))
+    for _ in range(28):
+        ang = random.uniform(0, 2 * math.pi)
+        speed = random.uniform(0.2, 1.3) * root
+        particles.append(Particle('ember', x, y, math.cos(ang) * speed, math.sin(ang) * speed + vertical_bias, random.uniform(0.5, 1.2), size=random.uniform(3.0, 6.0), color_start=(255, 215, 90), color_end=(60, 15, 5)))
+
+    for _ in range(12):
+        side = random.choice((-1.0, 1.0)) if symmetric else direction
+        ang = random.uniform(-1.2, 1.2)
+        speed = random.uniform(0.5, 1.9) * root
+        particles.append(Particle('debris', x, y, side * abs(math.cos(ang)) * speed, math.sin(ang) * speed + vertical_bias, random.uniform(0.4, 0.9), size=random.uniform(3.5, 7.0), color_start=(240, 190, 90), color_end=(40, 15, 5), angle=random.uniform(0, 2 * math.pi), spin=random.uniform(-8, 8)))
+    for _ in range(18):
+        side = random.choice((-1.0, 1.0)) if symmetric else direction
+
+        speed = random.uniform(2.8, 6.5) * root
+        particles.append(Particle('streak', x, y, side * speed, random.uniform(-1.4, 1.4) + vertical_bias, random.uniform(0.1, 0.28), size=2.5, color_start=(255, 255, 255), color_end=(180, 220, 255)))
+    for radius, life, color, width in [(0.22, 0.22, (255, 240, 160), 3), (0.4, 0.34, (255, 180, 80), 2), (0.62, 0.48, (120, 200, 255), 2)]:
+        shockwaves.append(ShockWave(x, y, radius, life, color, width))
+LEFT_X, RIGHT_X = (38, 690)
+SLIDER_W = 380
+INPUT_W, INPUT_GAP = (112, 18)
+
+LEFT_INPUT_X = LEFT_X + SLIDER_W + INPUT_GAP
+RIGHT_INPUT_X = RIGHT_X + SLIDER_W + INPUT_GAP
+BASE_Y = SIM_H + 62
+ROW = 50
+
+class BaseModel:
+    name = ''
+    short_name = ''
+
+
+    def __init__(self):
+        self.running = False
+        self.phase = 'ready'
+        self.t = 0.0
+        self.flash = 0.0
+        self.last_result = None
+        self.particles: list[Particle] = []
+
+        self.shockwaves: list[ShockWave] = []
+        self.notice = ''
+        self.sliders: dict[str, Slider] = {}
+        self.input_boxes: dict[str, InputBox] = {}
+        self.build_controls()
+        self.reset()
+
+        self.sync_inputs(force=True)
+
+    def build_controls(self):
+        raise NotImplementedError
+
+    def add_control(self, key, label, column, row, vmin, vmax, value, unit='', decimals=3):
+        x = LEFT_X if column == 0 else RIGHT_X
+        input_x = LEFT_INPUT_X if column == 0 else RIGHT_INPUT_X
+        y = BASE_Y + row * ROW
+        self.sliders[key] = Slider(label, x, y, SLIDER_W, vmin, vmax, value, unit, decimals)
+
+        self.input_boxes[key] = InputBox(key, '精确输入', input_x, y - 8, INPUT_W, value, unit.strip())
+
+    def any_input_active(self):
+        return any((box.active for box in self.input_boxes.values()))
+
+    def sync_inputs(self, force=False):
+        for key, value in self.input_values().items():
+            if key not in self.input_boxes:
+                continue
+            box = self.input_boxes[key]
+            if force or not box.active:
+                box.set_text_value(value)
+
+    def input_values(self):
+        return {key: slider.value for key, slider in self.sliders.items()}
+
+
+    def apply_input_value(self, key, text):
+        fallback = self.input_values()[key]
+        value = safe_float(text)
+        if value is None:
+            box = self.input_boxes[key]
+            box.invalid_flash = 1.0
+            box.text = box.format_value(fallback)
+            box.cursor = box.anchor = len(box.text)
+
+            return False
+        self.set_control_value(key, value)
+        self.sync_inputs(force=True)
+        return True
+
+    def set_control_value(self, key, value):
+        self.sliders[key].set_value(value)
+
+    def reset(self, keep_running=False):
+        raise NotImplementedError
+
+
+    def start_pause(self):
+        raise NotImplementedError
+
+    def jump_to_collision(self):
+        raise NotImplementedError
+
+    def step(self, dt):
+        raise NotImplementedError
+
+    def draw_scene(self):
+        raise NotImplementedError
+
+    def formula_lines(self):
+        return ('', '')
+
+    def formula_rect(self):
+        return pygame.Rect(690, SIM_H + 218, 528, 52)
+
+
+    def summary_line(self):
+        return ''
+
+    def draw_slider_value(self, key, slider):
+        slider.draw(screen)
+
+    def update_inputs(self, dt):
+        for box in self.input_boxes.values():
+            box.update(dt)
+
+    def handle_input_event(self, event):
+        input_was_active = self.any_input_active()
+        input_consumed = False
+        input_result = None
+
+        for box in self.input_boxes.values():
+            result = box.handle_event(event)
+            if result is not None:
+                input_consumed = True
+                if result[0] in ('commit', 'cancel'):
+                    input_result = result
+                if result[0] == 'consume':
+                    break
+        changed = False
+        if input_result is not None:
+            action, key, text = input_result
+
+            if action == 'commit':
+                changed = self.apply_input_value(key, text)
+            else:
+                self.sync_inputs(force=True)
+        return (input_was_active, input_consumed, changed)
+
+    def handle_sliders(self, event):
+        changed = False
+        for slider in self.sliders.values():
+            if slider.handle_event(event):
+                changed = True
+        if changed:
+            self.sync_inputs(force=False)
+
+        return changed
+
+    def draw_ui(self):
+        ui_y = SIM_H
+        pygame.draw.rect(screen, PANEL, (0, ui_y, WIDTH, UI_H))
+        pygame.draw.line(screen, (65, 80, 125), (0, ui_y), (WIDTH, ui_y), 2)
+        rounded_rect(screen, pygame.Rect(22, ui_y + 16, 604, 312), PANEL_2, 18, 1, (58, 72, 112))
+        rounded_rect(screen, pygame.Rect(672, ui_y + 16, 580, 312), PANEL_2, 18, 1, (58, 72, 112))
+
+        for key, slider in self.sliders.items():
+            self.draw_slider_value(key, slider)
+        for box in self.input_boxes.values():
+            box.draw(screen)
+        formula_1, formula_2 = self.formula_lines()
+        formula_rect = self.formula_rect()
+        rounded_rect(screen, formula_rect, (18, 26, 46), 10, 1, (48, 64, 100))
+        draw_text(screen, formula_1, (formula_rect.x + 12, formula_rect.y + 8), FONT_SMALL, ACCENT_2)
+
+        draw_text(screen, formula_2, (formula_rect.x + 12, formula_rect.y + 28), FONT_SMALL, MUTED)
+        APP.btn_start.draw(screen, self.running)
+        APP.btn_reset.draw(screen)
+        APP.btn_snap.draw(screen)
+        draw_text(screen, self.summary_line(), (535, SIM_H + 294), FONT_SMALL, (165, 182, 218))
+
+    def draw_header(self, state_text):
+        title = draw_spaced_text(screen, self.name, (34, 24), FONT_TITLE, TEXT, spacing=TITLE_LETTER_SPACING)
+
+        draw_horizontal_gradient_line(screen, 34, title.bottom + 4, title.width, ACCENT, (40, 60, 100), 3)
+        draw_text(screen, f'状态：{state_text}    时间：{format_sig3(self.t)} s' + f'    FPS:{clock.get_fps():.0f}', (38, 72), FONT, MUTED)
+        draw_text(screen, '1/2 切换模型 | Space 开始/暂停 | R 重置 | C 直接到碰撞 | Esc 退出', (38, 96), FONT_SMALL, (160, 175, 210))
+
+    def step_particles(self, real_dt, gravity=0.0):
+        for particle in self.particles:
+            particle.step(real_dt, gravity)
+        self.particles = [p for p in self.particles if p.life > 0]
+        for wave in self.shockwaves:
+            wave.step(real_dt)
+
+        self.shockwaves = [w for w in self.shockwaves if w.life > 0]
+
+    def draw_info_panel(self, current_lines, collision_lines=None, tips=None, highlight_keywords=()):
+        info_rect = pygame.Rect(815, 118, 438, SIM_H - 140)
+        rounded_rect(screen, info_rect, (10, 16, 32), 18)
+        glass = pygame.Surface((info_rect.w, info_rect.h), pygame.SRCALPHA).convert_alpha()
+        rounded_rect(glass, glass.get_rect(), (38, 52, 88, 55), 18)
+        screen.blit(glass, info_rect.topleft)
+
+        pygame.draw.rect(screen, (55, 72, 115), info_rect, width=1, border_radius=18)
+        draw_text(screen, '实时物理量', (info_rect.x + 20, info_rect.y + 14), FONT_BIG, TEXT)
+        draw_horizontal_gradient_line(screen, info_rect.x + 16, info_rect.y + 50, info_rect.w - 32, ACCENT, (30, 45, 80), 1)
+        y = info_rect.y + 62
+        for line in current_lines:
+            label, sep, value = line.partition('=')
+            if sep:
+                draw_text(screen, label + '=', (info_rect.x + 20, y), FONT_SMALL, MUTED)
+
+                w = FONT_SMALL.size(label + '=')[0]
+                draw_text(screen, value, (info_rect.x + 20 + w, y), FONT_SMALL, TEXT)
+            else:
+                draw_text(screen, line, (info_rect.x + 20, y), FONT_SMALL, MUTED)
+            y += 24
+        y += 2
+        draw_horizontal_gradient_line(screen, info_rect.x + 16, y, info_rect.w - 32, (60, 80, 130), (20, 30, 55), 1)
+        y += 10
+
+        if collision_lines:
+            draw_text(screen, '碰撞瞬时数据', (info_rect.x + 20, y), FONT, ACCENT_2)
+            y += 28
+            for line in collision_lines:
+                highlight = any((key in line for key in highlight_keywords))
+                draw_text(screen, line, (info_rect.x + 20, y), FONT_SMALL, ACCENT_3 if highlight else MUTED)
+                y += 21
+                if y > info_rect.bottom - 24:
+                    break
+        else:
+            draw_text(screen, '尚未发生碰撞', (info_rect.x + 20, y), FONT, MUTED)
+
+            y += 30
+            for tip in tips or []:
+                draw_text(screen, tip, (info_rect.x + 28, y), FONT_SMALL, (110, 130, 170))
+                y += 24
+
+class BallHitsRod(BaseModel):
+    name = '质点‑定轴细杆碰撞仿真'
+    short_name = '质点‑定轴细杆'
+
+    def build_controls(self):
+        self.add_control('m', '小球质量 m', 0, 0, 0.05, 10.0, 1.0, ' kg', 3)
+
+        self.add_control('M', '杆质量 M', 0, 1, 0.1, 20.0, 4.0, ' kg', 3)
+        self.add_control('u0', '小球入射速率 u0', 0, 2, 0.0, 15.0, 5.0, ' m/s', 3)
+        self.add_control('L', '杆长 L', 1, 0, 0.25, 2.0, 1.0, ' m', 3)
+        self.add_control('height_ratio', '碰撞高度 h/L', 1, 1, 0.0, 1.0, 0.72, '', 4)
+        self.add_control('anim_speed', '动画速度', 1, 2, 0.2, 2.5, 1.0, 'x', 2)
+        self.input_boxes.pop('height_ratio')
+
+        self.input_boxes['h'] = InputBox('h', '精确输入', RIGHT_INPUT_X, BASE_Y + ROW - 8, INPUT_W, self.current_h(), 'm')
+
+    def current_h(self):
+        return self.sliders['height_ratio'].value * self.sliders['L'].value
+
+    def input_values(self):
+        return {'m': self.sliders['m'].value, 'M': self.sliders['M'].value, 'u0': self.sliders['u0'].value, 'L': self.sliders['L'].value, 'h': self.current_h(), 'anim_speed': self.sliders['anim_speed'].value}
+
+    def set_control_value(self, key, value):
+        if key == 'L':
+            old_h = self.current_h()
+            self.sliders['L'].set_value(value)
+            self.sliders['height_ratio'].set_value(old_h / max(1e-09, self.sliders['L'].value))
+        elif key == 'h':
+            L = self.sliders['L'].value
+
+            self.sliders['height_ratio'].set_value(clamp(value, 0.0, L) / max(1e-09, L))
+        else:
+            self.sliders[key].set_value(value)
+
+    def ball_radius_world(self):
+        return 0.055 * self.sliders['L'].value
+
+    def start_x(self):
+        return -(self.ball_radius_world() + 0.85 * self.sliders['L'].value)
+
+    def reset(self, keep_running=False):
+        self.running = keep_running
+        self.phase = 'ready'
+
+        self.theta = math.pi / 2
+        self.omega = 0.0
+        self.ball_x = self.start_x()
+        self.ball_v = self.sliders['u0'].value
+        self.t = 0.0
+        self.collided = False
+
+        self.flash = 0.0
+        self.last_result = None
+        self.rod_trail = []
+        self.ball_trail = []
+        self.particles.clear()
+        self.shockwaves.clear()
+
+        self.notice = ''
+
+    def start_pause(self):
+        if self.phase == 'ready':
+            self.phase = 'approaching'
+        self.running = not self.running
+
+    def jump_to_collision(self):
+        self.phase = 'approaching'
+        self.ball_x = -self.ball_radius_world()
+        self.ball_v = self.sliders['u0'].value
+
+        self.do_collision()
+        self.running = True
+
+    def do_collision(self):
+        m = self.sliders['m'].value
+        M = self.sliders['M'].value
+        L = self.sliders['L'].value
+        h = self.current_h()
+
+        I = M * L * L / 3.0
+        e = 1.0
+        u_before = self.ball_v
+        omega_before = self.omega
+        relative_before = u_before - h * omega_before
+        denominator = 1.0 / m + h * h / I
+
+        impulse = -(1.0 + e) * relative_before / denominator
+        v_after = u_before + impulse / m
+        omega_after = omega_before - impulse * h / I
+        ke_before = 0.5 * m * u_before * u_before + 0.5 * I * omega_before * omega_before
+        ke_after = 0.5 * m * v_after * v_after + 0.5 * I * omega_after * omega_after
+        rod_L_before = I * omega_before
+
+        ball_MRV_before = m * h * u_before
+        total_L_before = rod_L_before + ball_MRV_before
+        rod_L_after = I * omega_after
+        ball_MRV_after = m * h * v_after
+        total_L_after = rod_L_after + ball_MRV_after
+        self.ball_v = v_after
+
+        self.omega = omega_after
+        self.phase = 'after'
+        self.collided = True
+        self.flash = 1.0
+        self.last_result = {'I': I, 'h': h, 'u_before': u_before, 'v_after': v_after, 'omega_before': omega_before, 'omega_after': omega_after, 'contact_before': h * omega_before, 'contact_after': h * omega_after, 'relative_before': relative_before, 'relative_after': v_after - h * omega_after, 'impulse': impulse, 'ke_before': ke_before, 'ke_after': ke_after, 'rod_L_before': rod_L_before, 'ball_MRV_before': ball_MRV_before, 'total_L_before': total_L_before, 'rod_L_after': rod_L_after, 'ball_MRV_after': ball_MRV_after, 'total_L_after': total_L_after, 'impact_time': self.t}
+        direction = -1.0 if impulse > 0 else 1.0
+
+        spawn_impact_particles(self.particles, self.shockwaves, 0.0, h, relative_before, direction=direction, vertical_bias=-0.3)
+
+    def step(self, dt):
+        if not self.running:
             return
+        h = self.current_h()
+        speed = self.sliders['anim_speed'].value
+        sim_dt = dt * speed
+        self.t += sim_dt
 
-        image = font.render(self.text, True, MUTED)
-        surface.blit(image, pos)
+        n = max(1, int(sim_dt / 0.0025))
+        sub = sim_dt / n
+        for _ in range(n):
+            if self.phase == 'approaching':
+                old_x = self.ball_x
+                self.ball_x += self.ball_v * sub
+                contact_x = -self.ball_radius_world()
+                if old_x < contact_x and self.ball_x >= contact_x:
+                    self.ball_x = contact_x
 
+                    self.do_collision()
+            elif self.phase == 'after':
+                self.ball_x += self.ball_v * sub
+                self.theta += self.omega * sub
+        self.step_particles(dt, gravity=0.0)
+        self.flash = max(0.0, self.flash - sim_dt * 2.2)
+        if not self.rod_trail or abs(self.rod_trail[-1] - self.theta) > 0.01:
+            self.rod_trail.append(self.theta)
+            if len(self.rod_trail) > 70:
+                self.rod_trail.pop(0)
 
+        self.ball_trail.append((self.ball_x, h))
+        if len(self.ball_trail) > 75:
+            self.ball_trail.pop(0)
 
-class NumericSnapshot:
-    def __init__(self):
-        self.values = {}
+    def formula_lines(self):
+        return ('L_rod=I*w，MRV=m*h*v', '绕定轴角动量守恒：I*w + m*h*v = constant')
 
-    def clear(self):
-        self.values.clear()
+    def summary_line(self):
+        return f"失重  m={format_sig3(self.sliders['m'].value)}  M={format_sig3(self.sliders['M'].value)}  L={format_sig3(self.sliders['L'].value)}  h={format_sig3(self.current_h())}  u0={format_sig3(self.sliders['u0'].value)}"
 
-
-    def set(self, key, value):
-        self.values[str(key)] = value
-
-    def get(self, key, default=None):
-        return self.values.get(str(key), default)
-
-
-    def copy(self):
-        other = NumericSnapshot()
-        other.values = dict(self.values)
-
-        return other
-
-
-class SceneScale:
-    def __init__(self, pixels_per_meter=100.0, origin=(0, 0)):
-        self.pixels_per_meter = max(1e-6, float(pixels_per_meter))
-
-        self.origin = tuple(origin)
-
-    def set_scale(self, pixels_per_meter):
-        self.pixels_per_meter = max(1e-6, float(pixels_per_meter))
-
-
-    def world_to_screen(self, x, y):
-        ox, oy = self.origin
-        s = self.pixels_per_meter
-
-        return int(ox + x * s), int(oy + y * s)
-
-    def screen_to_world(self, x, y):
-        ox, oy = self.origin
-
-        s = self.pixels_per_meter
-        return (x - ox) / s, (y - oy) / s
+    def draw_slider_value(self, key, slider):
+        if key == 'height_ratio':
+            slider.draw(screen, f'h = {format_sig3(self.current_h())} m  ({format_sig3(slider.value)}L)')
+        else:
+            slider.draw(screen)
 
 
+    def draw_scene(self):
+        m = self.sliders['m'].value
+        M = self.sliders['M'].value
+        L = self.sliders['L'].value
+        h = self.current_h()
+        I = M * L * L / 3.0
+        rb = self.ball_radius_world()
 
-class TraceBuffer:
-    def __init__(self, length=80):
-        self.length = max(2, int(length))
-        self.points = []
+        physical_scale_ratio = 3.0
+        equivalent_old_L = physical_scale_ratio * L
+        old_scale = min(145.0, 395.0 / equivalent_old_L, (SIM_H - 235) / (equivalent_old_L + 0.35))
+        scale = physical_scale_ratio * old_scale
+        pivot = (565, 195)
+
+        def w2s(x, y):
+            return (int(pivot[0] + x * scale), int(pivot[1] + y * scale))
+
+        screen.blit(STATIC_BG, (0, 0))
+        self.draw_header({'ready': '待开始', 'approaching': '小球接近杆', 'after': '碰撞后运动'}.get(self.phase, self.phase))
+        APP.draw_mode_tabs()
+        platform_y = h + rb
+        sx1, sy = w2s(min(-1.5 * L, self.ball_x - 0.8 * L), platform_y)
+        sx2, _ = w2s(1.25 * L, platform_y)
+
+        sx1, sx2 = (max(-80, sx1), min(WIDTH + 80, sx2))
+        pygame.draw.line(screen, (22, 28, 48), (sx1, sy + 10), (sx2, sy + 10), 10)
+        pygame.draw.line(screen, (35, 44, 70), (sx1, sy + 4), (sx2, sy + 4), 8)
+        pygame.draw.line(screen, PLATFORM, (sx1, sy), (sx2, sy), 5)
+        pygame.draw.line(screen, PLATFORM_TOP, (sx1, sy - 1), (sx2, sy - 1), 2)
+        for tx in range(max(-40, sx1), min(WIDTH + 40, sx2), 18):
+            pygame.draw.line(screen, (100, 115, 155), (tx, sy), (tx + 6, sy + 4), 1)
+
+        hx, hy = w2s(-0.36 * L, h)
+        pygame.draw.line(screen, (100, 120, 165), (hx, pivot[1]), (hx, hy), 2)
+        pygame.draw.line(screen, (100, 120, 165), (hx - 9, pivot[1]), (hx + 9, pivot[1]), 2)
+        pygame.draw.line(screen, (100, 120, 165), (hx - 9, hy), (hx + 9, hy), 2)
+        draw_text(screen, f'h={format_sig3(h)}m', (hx - 10, (pivot[1] + hy) // 2), FONT_SMALL, MUTED, anchor='midright')
+        trail_surf_1.fill((0, 0, 0, 0))
+
+        rod_ratio = {1: 0.052, 2: 0.043, 3: 0.035}.get(3, 0.028)
+        rod_w = max(5, int(rod_ratio * scale))
+        for i, theta in enumerate(self.rod_trail):
+            p = i / max(1, len(self.rod_trail) - 1)
+            end = w2s(-L * math.cos(theta), L * math.sin(theta))
+            pygame.draw.line(trail_surf_1, (*ROD_GLOW, int(10 + 45 * p)), pivot, end, max(2, int(rod_w * (0.35 + 0.65 * p))))
+        screen.blit(trail_surf_1, (0, 0))
+
+        end = w2s(-L * math.cos(self.theta), L * math.sin(self.theta))
+        glow_surf.fill((0, 0, 0, 0))
+        pygame.draw.line(glow_surf, (*ROD_GLOW, 35), pivot, end, rod_w + 12)
+        pygame.draw.line(glow_surf, (*ROD_GLOW, 60), pivot, end, rod_w + 5)
+        screen.blit(glow_surf, (0, 0))
+        pygame.draw.line(screen, (0, 0, 0), (pivot[0] + 5, pivot[1] + 7), (end[0] + 5, end[1] + 7), rod_w + 4)
+
+        pygame.draw.line(screen, ROD_COLOR, pivot, end, rod_w)
+        pygame.draw.line(screen, ROD_EDGE, pivot, end, max(2, rod_w // 4))
+        pygame.draw.circle(screen, (160, 110, 30), end, rod_w // 2 + 3)
+        pygame.draw.circle(screen, ROD_EDGE, end, max(3, rod_w // 4))
+        px, py = pivot
+        pygame.draw.rect(screen, (38, 48, 76), (px - 24, py - 38, 14, 76), border_radius=5)
+
+        pygame.draw.circle(screen, (5, 8, 18), (px + 3, py + 4), 26)
+        pygame.draw.circle(screen, (50, 62, 95), pivot, 24)
+        pygame.draw.circle(screen, (28, 38, 64), pivot, 20)
+        pygame.draw.circle(screen, (65, 82, 128), pivot, 16)
+        pygame.draw.circle(screen, ACCENT, pivot, 6)
+        pygame.draw.circle(screen, (210, 240, 255), pivot, 3)
+
+        w_rect = pygame.Rect(px + 32, py - 30, 190, 34)
+        rounded_rect(screen, w_rect, (12, 20, 38), 9, 1, (70, 95, 145))
+        draw_text(screen, f'w = {format_sig3(self.omega)} rad/s', w_rect.center, FONT_SMALL, ACCENT_3, anchor='center')
+        cpx, cpy = w2s(-h * math.cos(self.theta), h * math.sin(self.theta))
+        pygame.draw.circle(screen, ACCENT_2, (cpx, cpy), 9, 2)
+        pygame.draw.circle(screen, (255, 255, 255), (cpx, cpy), 4)
+
+        trail_surf_2.fill((0, 0, 0, 0))
+        for i, (bx, by) in enumerate(self.ball_trail):
+            p = i / max(1, len(self.ball_trail) - 1)
+            pos = w2s(bx, by)
+            if -100 <= pos[0] <= WIDTH + 100:
+                r = max(2, int(rb * scale * (0.22 + 0.4 * p)))
+                pygame.draw.circle(trail_surf_2, (*BALL1_GLOW, int(12 + 75 * p)), pos, r + 3)
+
+                pygame.draw.circle(trail_surf_2, (*BALL1_COLOR, int(12 + 75 * p)), pos, r)
+        screen.blit(trail_surf_2, (0, 0))
+        particle_surf.fill((0, 0, 0, 0))
+        for particle in self.particles:
+            particle.draw(particle_surf, w2s, streak_scale=scale * 0.08)
+        for wave in self.shockwaves:
+            wave.draw(particle_surf, w2s, scale)
+        screen.blit(particle_surf, (0, 0))
+
+        ball_pos = w2s(self.ball_x, h)
+        br = max(12, int(rb * scale))
+        pygame.draw.ellipse(screen, (0, 0, 0), (ball_pos[0] - br - 4, sy - max(3, br // 4), 2 * br + 8, max(6, br // 2)))
+        glow_surf.fill((0, 0, 0, 0))
+        pygame.draw.circle(glow_surf, (*BALL1_GLOW, 28), ball_pos, br + 20)
+        pygame.draw.circle(glow_surf, (*BALL1_GLOW, 45), ball_pos, br + 12)
+
+        screen.blit(glow_surf, (0, 0))
+        pygame.draw.circle(screen, (4, 10, 23), (ball_pos[0] + 4, ball_pos[1] + 5), br + 2)
+        pygame.draw.circle(screen, BALL1_COLOR, ball_pos, br)
+        pygame.draw.circle(screen, (31, 125, 190), ball_pos, br, 2)
+        pygame.draw.circle(screen, BALL1_EDGE, (ball_pos[0] - br // 3, ball_pos[1] - br // 3), max(3, br // 4))
+        pygame.draw.circle(screen, (255, 255, 255), (ball_pos[0] - br // 3 - 1, ball_pos[1] - br // 3 - 1), max(2, br // 7))
+
+        if self.flash > 0:
+            contact = w2s(0.0, h)
+            flash_surf.fill((0, 0, 0, 0))
+            f = self.flash
+            r0 = int(clamp((1.15 - f) * 80 + 10, 5, 90))
+            a0 = int(220 * f)
+            pygame.draw.circle(flash_surf, (255, 255, 255, a0), contact, r0)
+
+            pygame.draw.circle(flash_surf, (255, 210, 80, int(a0 * 0.45)), contact, r0 + int(30 * f))
+            pygame.draw.circle(flash_surf, (120, 180, 255, int(a0 * 0.2)), contact, r0 + int(55 * f))
+            screen.blit(flash_surf, (0, 0))
+        if abs(self.ball_v) > 0.01:
+            arrow_len = clamp(abs(self.ball_v) * scale * 0.07, 35, 150)
+            direction = 1 if self.ball_v > 0 else -1
+            ay = ball_pos[1] - br - 12
+
+            finish = (int(ball_pos[0] + direction * arrow_len), ay)
+            draw_arrow(screen, (ball_pos[0], ay), finish, GREEN, 3)
+            draw_text(screen, f'v={format_sig3(self.ball_v)} m/s', (finish[0] + (10 if direction > 0 else -10), ay - 12), FONT_SMALL, GREEN, anchor='topleft' if direction > 0 else 'topright')
+        if not self.collided:
+            draw_text(screen, f"入射速率 u0={format_sig3(self.sliders['u0'].value)} m/s", (245, 205), FONT_SMALL, ACCENT_3)
+        rod_L_now = I * self.omega
+        ball_MRV_now = m * h * self.ball_v
+
+        total_L_now = rod_L_now + ball_MRV_now
+        current_lines = [f'转动惯量 I = {format_sig3(I)} kg*m^2', f'小球速度 v = {format_sig3(self.ball_v)} m/s', f'杆角速度 w = {format_sig3(self.omega)} rad/s', f'杆角动量 I*w = {format_sig3(rod_L_now)} kg*m^2/s', f'小球 MRV=m*h*v = {format_sig3(ball_MRV_now)} kg*m^2/s', f'总角动量 = {format_sig3(total_L_now)} kg*m^2/s']
+        collision_lines = None
+        if self.last_result:
+            r = self.last_result
+            collision_lines = [f"碰撞时刻 t = {format_sig3(r['impact_time'])} s", f"碰前杆角动量 = {format_sig3(r['rod_L_before'])}", f"碰前小球 MRV = {format_sig3(r['ball_MRV_before'])}", f"碰前总角动量 = {format_sig3(r['total_L_before'])}", f"碰后杆角动量 = {format_sig3(r['rod_L_after'])}", f"碰后小球 MRV = {format_sig3(r['ball_MRV_after'])}", f"碰后总角动量 = {format_sig3(r['total_L_after'])}", f"角动量误差 = {format_sig3(abs(r['total_L_after'] - r['total_L_before']))}", f"能量误差 = {format_sig3(abs(r['ke_after'] - r['ke_before']))} J"]
+        self.draw_info_panel(current_lines, collision_lines, ['失重：碰后杆做匀角速度转动', 'MRV 中 R=h，为小球到定轴的垂直距离', '按 C 直接显示碰撞结果'], ('碰后总角动量', '角动量误差', '能量误差'))
 
 
-    def clear(self):
-        self.points.clear()
+class BallBallCollision(BaseModel):
+    name = '两自由质点弹性碰撞仿真'
+    short_name = '两自由质点'
+    BALL_RADIUS_WORLD = 0.34
 
-    def add(self, x, y):
-        self.points.append((float(x), float(y)))
+    def build_controls(self):
+        self.add_control('m1', '左球质量 m1', 0, 0, 0.05, 10.0, 1.0, ' kg', 3)
+        self.add_control('u1', '左球初速度 u1', 0, 1, -12.0, 12.0, 6.0, ' m/s', 3)
+        self.add_control('gap', '两球初始表面间距 d', 0, 2, 0.3, 8.0, 3.0, ' m', 3)
 
-        if len(self.points) > self.length:
-            del self.points[0]
+        self.add_control('m2', '右球质量 m2', 1, 0, 0.05, 10.0, 2.0, ' kg', 3)
+        self.add_control('u2', '右球初速度 u2', 1, 1, -12.0, 12.0, 0.0, ' m/s', 3)
+        self.add_control('e', '恢复系数 e', 1, 2, 0.0, 1.0, 1.0, '', 3)
+        self.add_control('anim_speed', '动画速度', 1, 3, 0.2, 2.5, 1.0, 'x', 2)
 
-    def draw(self, surface, transform, color, width=1):
-        if len(self.points) < 2:
+    def reset(self, keep_running=False):
+        u1 = self.sliders['u1'].value
+        u2 = self.sliders['u2'].value
+
+        gap = self.sliders['gap'].value
+        r = self.BALL_RADIUS_WORLD
+        self.running = keep_running
+        self.phase = 'ready'
+        self.x1 = -gap / 2.0 - r
+        self.x2 = gap / 2.0 + r
+
+        self.v1 = u1
+        self.v2 = u2
+        self.t = 0.0
+        self.collided = False
+        self.flash = 0.0
+        self.last_result = None
+
+        self.trail1 = []
+        self.trail2 = []
+        self.particles.clear()
+        self.shockwaves.clear()
+        self.notice = ''
+
+
+    def can_collide(self):
+        return self.v1 > self.v2 + 1e-10
+
+    def start_pause(self):
+        if self.phase == 'ready':
+            self.phase = 'moving'
+            if not self.can_collide():
+                self.notice = '当前 u1 <= u2，两球间距不会缩小，因此不会发生碰撞。'
+        self.running = not self.running
+
+    def jump_to_collision(self):
+        if not self.can_collide():
+            self.phase = 'moving'
+            self.running = False
+
+            self.notice = '无法跳到碰撞：当前 u1 <= u2，两球不会相撞。'
             return
+        r = self.BALL_RADIUS_WORLD
+        self.x1 = -r
+        self.x2 = r
+        self.phase = 'moving'
 
-        pts = [transform(x, y) for x, y in self.points]
-        pygame.draw.lines(surface, color, False, pts, width)
+        self.do_collision(0.0)
+        self.running = True
 
+    def do_collision(self, contact_x):
+        m1 = self.sliders['m1'].value
+        m2 = self.sliders['m2'].value
+        e = self.sliders['e'].value
+        u1, u2 = (self.v1, self.v2)
 
+        relative_before = u1 - u2
+        impulse = -(1.0 + e) * relative_before / (1.0 / m1 + 1.0 / m2)
+        v1 = u1 + impulse / m1
+        v2 = u2 - impulse / m2
+        p_before = m1 * u1 + m2 * u2
+        p_after = m1 * v1 + m2 * v2
 
-class ValueTable:
-    def __init__(self, x, y, row_height=21):
-        self.x = int(x)
-        self.y = int(y)
+        ke_before = 0.5 * m1 * u1 * u1 + 0.5 * m2 * u2 * u2
+        ke_after = 0.5 * m1 * v1 * v1 + 0.5 * m2 * v2 * v2
+        self.v1, self.v2 = (v1, v2)
+        self.phase = 'after'
+        self.collided = True
+        self.flash = 1.0
 
-        self.row_height = int(row_height)
-        self.rows = []
+        self.notice = ''
+        self.last_result = {'e': e, 'u1': u1, 'u2': u2, 'v1': v1, 'v2': v2, 'relative_before': relative_before, 'relative_after': v1 - v2, 'impulse': impulse, 'p_before': p_before, 'p_after': p_after, 'ke_before': ke_before, 'ke_after': ke_after, 'impact_time': self.t, 'contact_x': contact_x}
+        spawn_impact_particles(self.particles, self.shockwaves, contact_x, 0.0, relative_before, symmetric=True)
 
-    def clear(self):
-        self.rows.clear()
+    def step(self, dt):
+        if not self.running:
+            return
+        speed = self.sliders['anim_speed'].value
+        sim_dt = dt * speed
 
+        self.t += sim_dt
+        n = max(1, int(sim_dt / 0.0025))
+        sub = sim_dt / n
+        r = self.BALL_RADIUS_WORLD
+        for _ in range(n):
+            old_x1, old_x2 = (self.x1, self.x2)
+            self.x1 += self.v1 * sub
 
-    def add(self, label, value, unit=''):
-        self.rows.append((str(label), value, str(unit)))
+            self.x2 += self.v2 * sub
+            if not self.collided and self.v1 > self.v2:
+                old_gap = old_x2 - r - (old_x1 + r)
+                new_gap = self.x2 - r - (self.x1 + r)
+                if old_gap > 0.0 and new_gap <= 0.0:
+                    contact_x = (self.x1 + r + (self.x2 - r)) / 2.0
+                    self.x1 = contact_x - r
+                    self.x2 = contact_x + r
 
-    def draw(self, surface, font, label_color=MUTED, value_color=TEXT):
-        y = self.y
+                    self.do_collision(contact_x)
+        self.step_particles(dt, gravity=0.0)
+        self.flash = max(0.0, self.flash - sim_dt * 2.2)
+        self.trail1.append(self.x1)
+        self.trail2.append(self.x2)
+        if len(self.trail1) > 85:
+            self.trail1.pop(0)
 
-        for label, value, unit in self.rows:
-            label_image = font.render(label, True, label_color)
-            value_image = font.render(f'{value}{unit}', True, value_color)
+        if len(self.trail2) > 85:
+            self.trail2.pop(0)
 
-            surface.blit(label_image, (self.x, y))
-            surface.blit(value_image, (self.x + 150, y))
+    def formula_lines(self):
+        return ('J=-(1+e)(u1-u2)/(1/m1+1/m2)', 'v1=u1+J/m1，v2=u2-J/m2；e=1 时总动能守恒')
 
-            y += self.row_height
+    def formula_rect(self):
+        return pygame.Rect(38, SIM_H + 218, 570, 52)
 
+    def summary_line(self):
+        return f"m1={format_sig3(self.sliders['m1'].value)}  u1={format_sig3(self.sliders['u1'].value)}  m2={format_sig3(self.sliders['m2'].value)}  u2={format_sig3(self.sliders['u2'].value)}  d={format_sig3(self.sliders['gap'].value)}  e={format_sig3(self.sliders['e'].value)}"
 
-class CollisionLedger:
-    def __init__(self):
-        self.before = None
+    def draw_ui(self):
+        super().draw_ui()
+        relation = '会相撞' if self.v1 > self.v2 else '不会相撞'
 
-        self.after = None
+        delta_v = self.v1 - self.v2
+        rect = pygame.Rect(690, SIM_H + 218, 528, 52)
+        rounded_rect(screen, rect, (18, 26, 46), 10, 1, (48, 64, 100))
+        draw_text(screen, '碰撞判定', (rect.x + 12, rect.y + 7), FONT_SMALL, MUTED)
+        draw_text(screen, f'v1-v2 = {format_sig3(delta_v)} m/s  →  {relation}', (rect.x + 12, rect.y + 27), FONT_SMALL, ACCENT_3 if delta_v > 0 else RED)
 
-    def reset(self):
-        self.before = None
+    def draw_scene(self):
+        m1 = self.sliders['m1'].value
 
-        self.after = None
+        m2 = self.sliders['m2'].value
+        scale = 92.0
+        origin_x = 405
+        center_y = 375
+        radius_px = int(self.BALL_RADIUS_WORLD * scale)
 
-    def capture_before(self, **values):
-        self.before = dict(values)
+        platform_y = center_y + radius_px + 14
 
+        def w2s(x, y=0.0):
+            return (int(origin_x + x * scale), int(center_y - y * scale))
+        screen.blit(STATIC_BG, (0, 0))
+        self.draw_header({'ready': '待开始', 'moving': '两球运动中', 'after': '碰撞后运动'}.get(self.phase, self.phase))
+        APP.draw_mode_tabs()
+        pygame.draw.line(screen, (22, 28, 48), (-80, platform_y + 10), (WIDTH + 80, platform_y + 10), 10)
 
-    def capture_after(self, **values):
-        self.after = dict(values)
+        pygame.draw.line(screen, (35, 44, 70), (-80, platform_y + 4), (WIDTH + 80, platform_y + 4), 8)
+        pygame.draw.line(screen, PLATFORM, (-80, platform_y), (WIDTH + 80, platform_y), 5)
+        pygame.draw.line(screen, PLATFORM_TOP, (-80, platform_y - 1), (WIDTH + 80, platform_y - 1), 2)
+        for tx in range(-80, WIDTH + 80, 18):
+            pygame.draw.line(screen, (100, 115, 155), (tx, platform_y), (tx + 6, platform_y + 4), 1)
+        pygame.draw.line(screen, (80, 100, 150), (35, center_y), (780, center_y), 1)
+        for world_x in range(-4, 5):
+            sx, _ = w2s(world_x)
 
-    def difference(self, key):
-        if self.before is None or self.after is None:
-            return None
+            pygame.draw.line(screen, (85, 105, 150), (sx, center_y - 7), (sx, center_y + 7), 1)
+            draw_text(screen, f'{world_x}', (sx, center_y + 12), FONT_TINY, MUTED, anchor='midtop')
+        if not self.collided:
+            left_surface = self.x1 + self.BALL_RADIUS_WORLD
+            right_surface = self.x2 - self.BALL_RADIUS_WORLD
+            if right_surface > left_surface:
+                p1 = w2s(left_surface, -0.72)
+                p2 = w2s(right_surface, -0.72)
 
-        if key not in self.before or key not in self.after:
-            return None
-        return self.after[key] - self.before[key]
+                pygame.draw.line(screen, (105, 125, 175), p1, p2, 2)
+                pygame.draw.line(screen, (105, 125, 175), (p1[0], p1[1] - 7), (p1[0], p1[1] + 7), 2)
+                pygame.draw.line(screen, (105, 125, 175), (p2[0], p2[1] - 7), (p2[0], p2[1] + 7), 2)
+                draw_text(screen, f'当前间距={format_sig3(right_surface - left_surface)} m', ((p1[0] + p2[0]) // 2, p1[1] + 10), FONT_SMALL, MUTED, anchor='midtop')
+        trail_surf_1.fill((0, 0, 0, 0))
+        for i, x in enumerate(self.trail1):
+            p = i / max(1, len(self.trail1) - 1)
 
+            pos = w2s(x)
+            if -100 <= pos[0] <= WIDTH + 100:
+                r = max(2, int(radius_px * (0.12 + 0.26 * p)))
+                pygame.draw.circle(trail_surf_1, (*BALL1_GLOW, int(10 + 70 * p)), pos, r + 3)
+                pygame.draw.circle(trail_surf_1, (*BALL1_COLOR, int(10 + 70 * p)), pos, r)
+        screen.blit(trail_surf_1, (0, 0))
+        trail_surf_2.fill((0, 0, 0, 0))
 
+        for i, x in enumerate(self.trail2):
+            p = i / max(1, len(self.trail2) - 1)
+            pos = w2s(x)
+            if -100 <= pos[0] <= WIDTH + 100:
+                r = max(2, int(radius_px * (0.12 + 0.26 * p)))
+                pygame.draw.circle(trail_surf_2, (*BALL2_GLOW, int(10 + 70 * p)), pos, r + 3)
+                pygame.draw.circle(trail_surf_2, (*BALL2_COLOR, int(10 + 70 * p)), pos, r)
+        screen.blit(trail_surf_2, (0, 0))
 
-class MouseCapture:
-    def __init__(self):
-        self.owner = None
+        particle_surf.fill((0, 0, 0, 0))
+        for particle in self.particles:
+            particle.draw(particle_surf, w2s, streak_scale=5.5)
+        for wave in self.shockwaves:
+            wave.draw(particle_surf, w2s, scale)
+        screen.blit(particle_surf, (0, 0))
 
-    def take(self, owner):
-        if self.owner is None or self.owner is owner:
-            self.owner = owner
+        def draw_ball(pos, radius, base_color, edge_color, glow_color, label, mass):
+            px, py = pos
+            pygame.draw.ellipse(screen, (0, 0, 0), (px - radius - 6, platform_y - max(4, radius // 4), 2 * radius + 12, max(8, radius // 2)))
 
-            return True
-        return False
+            glow_surf.fill((0, 0, 0, 0))
+            pygame.draw.circle(glow_surf, (*glow_color, 28), pos, radius + 20)
+            pygame.draw.circle(glow_surf, (*glow_color, 46), pos, radius + 11)
+            screen.blit(glow_surf, (0, 0))
+            pygame.draw.circle(screen, (4, 10, 23), (px + 4, py + 5), radius + 2)
+            pygame.draw.circle(screen, base_color, pos, radius)
 
+            pygame.draw.circle(screen, lerp_color(base_color, (15, 55, 100), 0.35), pos, radius, 2)
+            pygame.draw.circle(screen, edge_color, (px - radius // 3, py - radius // 3), max(4, radius // 4))
+            pygame.draw.circle(screen, (255, 255, 255), (px - radius // 3 - 1, py - radius // 3 - 1), max(2, radius // 8))
+            draw_text(screen, label, (px, py - radius - 38), FONT_BIG, edge_color, anchor='midbottom')
+            draw_text(screen, f'm={format_sig3(mass)} kg', (px, py + radius + 18), FONT_SMALL, MUTED, anchor='midtop')
+        pos1, pos2 = (w2s(self.x1), w2s(self.x2))
 
-    def release(self, owner):
-        if self.owner is owner:
-            self.owner = None
+        draw_ball(pos1, radius_px, BALL1_COLOR, BALL1_EDGE, BALL1_GLOW, '球 1', m1)
+        draw_ball(pos2, radius_px, BALL2_COLOR, BALL2_EDGE, BALL2_GLOW, '球 2', m2)
 
-    def held_by(self, owner):
-        return self.owner is owner
+        def draw_velocity(pos, velocity, label):
+            if abs(velocity) < 0.01:
+                draw_text(screen, f'{label}=0', (pos[0], pos[1] - radius_px - 15), FONT_SMALL, GREEN, anchor='midbottom')
+                return
+            direction = 1 if velocity > 0 else -1
+            arrow_len = clamp(abs(velocity) * 10.0, 35, 150)
 
+            y = pos[1] - radius_px - 18
+            finish = (int(pos[0] + direction * arrow_len), y)
+            draw_arrow(screen, (pos[0], y), finish, GREEN, 3)
+            draw_text(screen, f'{label}={format_sig3(velocity)} m/s', (finish[0] + (10 if direction > 0 else -10), y - 12), FONT_SMALL, GREEN, anchor='topleft' if direction > 0 else 'topright')
+        draw_velocity(pos1, self.v1, 'v1')
 
+        draw_velocity(pos2, self.v2, 'v2')
+        if self.flash > 0 and self.last_result:
+            contact = w2s(self.last_result['contact_x'])
+            flash_surf.fill((0, 0, 0, 0))
+            f = self.flash
+            r0 = int(clamp((1.15 - f) * 80 + 10, 5, 90))
+            a0 = int(220 * f)
 
-def safe_number(text_value, default=None):
-    try:
-        value = float(text_value)
-    except (TypeError, ValueError):
-        return default
-    if not math.isfinite(value):
-        return default
+            pygame.draw.circle(flash_surf, (255, 255, 255, a0), contact, r0)
+            pygame.draw.circle(flash_surf, (255, 210, 80, int(a0 * 0.45)), contact, r0 + int(30 * f))
+            pygame.draw.circle(flash_surf, (120, 180, 255, int(a0 * 0.2)), contact, r0 + int(55 * f))
+            screen.blit(flash_surf, (0, 0))
+        if self.notice:
+            notice_rect = pygame.Rect(38, 192, 730, 40)
+            rounded_rect(screen, notice_rect, (62, 28, 38), 10, 1, (145, 65, 80))
 
-    return value
+            draw_text(screen, self.notice, notice_rect.center, FONT_SMALL, (255, 185, 190), anchor='center')
+        p_now = m1 * self.v1 + m2 * self.v2
+        ke1 = 0.5 * m1 * self.v1 * self.v1
+        ke2 = 0.5 * m2 * self.v2 * self.v2
+        current_lines = [f'左球速度 v1 = {format_sig3(self.v1)} m/s', f'右球速度 v2 = {format_sig3(self.v2)} m/s', f'相对速度 v1-v2 = {format_sig3(self.v1 - self.v2)} m/s', f'质心速度 Vcm = {format_sig3(p_now / (m1 + m2))} m/s', f'左球动能 = {format_sig3(ke1)} J', f'右球动能 = {format_sig3(ke2)} J', f'总动量 = {format_sig3(p_now)} kg*m/s']
+        collision_lines = None
 
-
-def lerp_number(a, b, t):
-    return float(a) + (float(b) - float(a)) * clamp(float(t), 0.0, 1.0)
-
-
-
-def lerp_rgb(a, b, t):
-    t = clamp(float(t), 0.0, 1.0)
-    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
-
-
-
-def draw_soft_panel(surface, rect, fill=(24, 33, 53), border=(58, 72, 105)):
-    pygame.draw.rect(surface, fill, rect, border_radius=10)
-    pygame.draw.rect(surface, border, rect, 1, border_radius=10)
-
-
-
-def draw_separator(surface, x1, x2, y, color=(58, 72, 105)):
-    pygame.draw.line(surface, color, (x1, y), (x2, y), 1)
-
-
-def signed_text(value, digits=3):
-    value = float(value)
-    return f'{value:+.{digits}f}'
-
-
+        if self.last_result:
+            r = self.last_result
+            collision_lines = [f"碰撞时刻 t = {format_sig3(r['impact_time'])} s", f"恢复系数 e = {format_sig3(r['e'])}", f"碰前 u1 = {format_sig3(r['u1'])} m/s", f"碰前 u2 = {format_sig3(r['u2'])} m/s", f"碰后 v1 = {format_sig3(r['v1'])} m/s", f"碰后 v2 = {format_sig3(r['v2'])} m/s", f"冲量 J = {format_sig3(r['impulse'])} N*s", f"动量误差 = {format_sig3(abs(r['p_after'] - r['p_before']))}", f"动能变化 = {format_sig3(r['ke_after'] - r['ke_before'])} J"]
+        self.draw_info_panel(current_lines, collision_lines, ['仅当 u1 > u2 时两球会相撞', 'e=1 为理想弹性碰撞', '正速度向右，负速度向左'], ('碰后 v1', '碰后 v2', '冲量', '动量误差'))
 
 class App:
 
     def __init__(self):
-        self.models = [TwoBalls(), BallRod()]
-        self.index = 0
+        self.models = [BallBallCollision(), BallHitsRod()]
+        self.mode_index = 0
+        self.btn_start = Button('开始 / 暂停  Space', pygame.Rect(38, SIM_H + 286, 180, 38))
 
-        self.start = Button('开始 / 暂停', (835, 815, 120, 42))
-        self.reset = Button('重置', (965, 815, 80, 42))
-
-        self.snap = Button('直接到碰撞', (1055, 815, 130, 42))
-        self.tabs = [Button('1 两自由质点', (830, 25, 160, 40)), Button('2 质点-细杆', (1000, 25, 170, 40))]
-
+        self.btn_reset = Button('重置  R', pygame.Rect(236, SIM_H + 286, 110, 38))
+        self.btn_snap = Button('直接到碰撞  C', pygame.Rect(364, SIM_H + 286, 150, 38))
+        self.mode_buttons = [Button('1  两自由质点弹性碰撞仿真', pygame.Rect(38, 118, 280, 36)), Button('2  质点‑定轴细杆碰撞仿真', pygame.Rect(330, 118, 280, 36))]
 
     @property
-    def m(self):
-        return self.models[self.index]
+    def model(self):
+        return self.models[self.mode_index]
 
-    def switch(self, i):
-        self.index = i
+    def switch_mode(self, index):
+        if 0 <= index < len(self.models) and index != self.mode_index:
+            for box in self.model.input_boxes.values():
+                box.active = False
+                box.dragging = False
 
+            self.model.running = False
+            self.mode_index = index
+            for box in self.model.input_boxes.values():
+                box.active = False
+                box.dragging = False
+            self.model.running = False
 
-    def event(self, e):
-        if e.type == pygame.KEYDOWN:
-            if e.key == pygame.K_1:
-                self.switch(0)
-            elif e.key == pygame.K_2:
-                self.switch(1)
-            elif e.key == pygame.K_SPACE:
-                self.m.start()
-            elif e.key == pygame.K_r:
-                self.m.reset()
-            elif e.key == pygame.K_c:
-                self.m.snap()
-        for i, b in enumerate(self.tabs):
-            if b.clicked(e):
-                self.switch(i)
+    def draw_mode_tabs(self):
+        for i, button in enumerate(self.mode_buttons):
+            button.draw(screen, active=i == self.mode_index)
 
-        if self.start.clicked(e):
-            self.m.start()
-        if self.reset.clicked(e):
-            self.m.reset()
-
-        if self.snap.clicked(e):
-            self.m.snap()
-        self.m.controls_event(e)
-
-
-    def draw(self):
-        gradient_background()
-        pygame.draw.rect(screen, PANEL, (0, SIM_H, WIDTH, UI_H))
-
-        pygame.draw.line(screen, (65, 82, 118), (0, SIM_H), (WIDTH, SIM_H), 2)
-        self.m.draw_header()
-
-        self.m.draw_scene()
-        self.m.draw_cards()
-
-        self.m.draw_controls()
-        for i, b in enumerate(self.tabs):
-            b.draw(self.index == i)
-
-        self.start.draw(self.m.running)
-        self.reset.draw()
-
-        self.snap.draw()
-        draw_text('第2版 Functional UI', (1210, 885), TINY, MUTED, 'bottomright')
-
+        draw_text(screen, f'V{3}', (625, 136), FONT_SMALL, ACCENT_2, anchor='midleft')
 
     def run(self):
-        alive = True
-        while alive:
-            dt = min(clock.tick(FPS) / 1000, 0.04)
+        running_app = True
+        while running_app:
+            dt = clock.tick(FPS) / 1000.0
+            model = self.model
+            model.update_inputs(dt)
+            need_reset = False
 
-            for e in pygame.event.get():
-                if e.type == pygame.QUIT:
-                    alive = False
-                else:
-                    self.event(e)
-            self.m.step(dt)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running_app = False
+                    continue
+                switched = False
+                for i, button in enumerate(self.mode_buttons):
+                    if button.clicked(event):
+                        self.switch_mode(i)
+                        switched = True
+                        break
 
-            self.draw()
+                if switched:
+                    continue
+                model = self.model
+                input_was_active, input_consumed, input_changed = model.handle_input_event(event)
+                if input_changed:
+                    need_reset = True
+                if event.type == pygame.KEYDOWN and (not model.any_input_active()):
+                    if event.key == pygame.K_ESCAPE:
+                        running_app = False
+                    elif event.key == pygame.K_1:
+                        self.switch_mode(0)
+                    elif event.key == pygame.K_2:
+                        self.switch_mode(1)
+                    elif event.key == pygame.K_SPACE:
+                        model.start_pause()
+                    elif event.key == pygame.K_r:
+                        model.reset()
+                    elif event.key == pygame.K_c and 3 >= 2:
+                        model.jump_to_collision()
+                if input_consumed or input_was_active:
+                    continue
+
+                if self.btn_start.clicked(event):
+                    model.start_pause()
+                if self.btn_reset.clicked(event):
+                    model.reset()
+                if 3 >= 2 and self.btn_snap.clicked(event):
+                    model.jump_to_collision()
+                if model.handle_sliders(event):
+                    need_reset = True
+            model = self.model
+            if need_reset:
+                model.reset(keep_running=False)
+
+                model.sync_inputs(force=False)
+            model.step(dt)
+            model.draw_scene()
+            model.draw_ui()
             pygame.display.flip()
-
         pygame.quit()
+
+        sys.exit()
+APP = App()
 if __name__ == '__main__':
-    App().run()
+    APP.run()
