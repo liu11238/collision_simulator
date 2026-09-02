@@ -1,4 +1,4 @@
-"""质点与定轴细杆碰撞的物理模型和场景绘制。"""
+"""重力场中质点与定轴细杆碰撞的物理模型和场景绘制。"""
 
 from __future__ import annotations
 
@@ -19,24 +19,36 @@ from render.primitives import draw_arrow, draw_text, rounded_rect
 from ui.widgets import InputBox
 from utils import clamp, format_sig3
 
+
 class BallHitsRod(BaseModel):
+    """杆从初始摆角摆到竖直位置，并以指定碰撞点速度撞击小球。
+
+    ``theta`` 的定义沿用原模型：杆端坐标为
+    ``(-L*cos(theta), L*sin(theta))``，所以 ``theta=pi/2`` 是竖直向下，
+    ``theta=0`` 是水平向左。UI 中的 ``initial_angle_deg`` 则是相对于竖直
+    向下方向的摆角，范围为 0--90 度。
+    """
+
     name = "质点‑定轴细杆碰撞仿真"
     short_name = "质点‑定轴细杆"
+    EPS = 1e-12
 
     def build_controls(self):
         self.add_control("m", "小球质量 m", 0, 0, 0.05, 10.0, 1.00, " kg", 3)
         self.add_control("M", "杆质量 M", 0, 1, 0.10, 20.0, 4.00, " kg", 3)
-        self.add_control("u0", "小球入射速率 u0", 0, 2, 0.00, 15.0, 5.00, " m/s", 3)
+        self.add_control("vc", "目标碰撞点速率 vc", 0, 2, 0.00, 30.0, 3.00, " m/s", 3)
+        self.add_control("g", "重力加速度 g", 0, 3, 0.00, 25.0, 9.80, " m/s^2", 3)
 
         self.add_control("L", "杆长 L", 1, 0, 0.25, 2.00, 1.00, " m", 3)
         self.add_control("height_ratio", "碰撞高度 h/L", 1, 1, 0.00, 1.00, 0.72, "", 4)
         self.add_control("anim_speed", "动画速度", 1, 2, 0.20, 2.50, 1.00, "x", 2)
+
+        # h 仍然保留精确输入，但滑块用 h/L 表示，便于同时调整 L 和碰撞位置。
         self.input_boxes.pop("height_ratio")
         self.input_boxes["h"] = InputBox(
             "h", "精确输入", RIGHT_INPUT_X, BASE_Y + ROW - 8,
             INPUT_W, self.current_h(), "m"
         )
-
 
     def current_h(self):
         return self.sliders["height_ratio"].value * self.sliders["L"].value
@@ -45,7 +57,8 @@ class BallHitsRod(BaseModel):
         return {
             "m": self.sliders["m"].value,
             "M": self.sliders["M"].value,
-            "u0": self.sliders["u0"].value,
+            "vc": self.sliders["vc"].value,
+            "g": self.sliders["g"].value,
             "L": self.sliders["L"].value,
             "h": self.current_h(),
             "anim_speed": self.sliders["anim_speed"].value,
@@ -55,91 +68,181 @@ class BallHitsRod(BaseModel):
         if key == "L":
             old_h = self.current_h()
             self.sliders["L"].set_value(value)
-            self.sliders["height_ratio"].set_value(old_h / max(1e-9, self.sliders["L"].value))
+            self.sliders["height_ratio"].set_value(
+                old_h / max(1e-9, self.sliders["L"].value)
+            )
         elif key == "h":
             L = self.sliders["L"].value
-
-            self.sliders["height_ratio"].set_value(clamp(value, 0.0, L) / max(1e-9, L))
+            self.sliders["height_ratio"].set_value(
+                clamp(value, 0.0, L) / max(1e-9, L)
+            )
         else:
             self.sliders[key].set_value(value)
 
     def ball_radius_world(self):
         return 0.055 * self.sliders["L"].value
 
-    def start_x(self):
-        # 小球位于杆的左侧，向右运动并撞击竖直杆。
-        return -(self.ball_radius_world() + 0.85 * self.sliders["L"].value)
+    def inertia(self):
+        M = self.sliders["M"].value
+        L = self.sliders["L"].value
+        return M * L * L / 3.0
+
+    def target_collision_speed(self):
+        """目标为碰撞点（距转轴 h 处）的线速度，单位 m/s。"""
+        return self.sliders["vc"].value
+
+    def target_angular_speed(self):
+        h = self.current_h()
+        if h <= self.EPS:
+            return 0.0
+        return self.target_collision_speed() / h
+
+    def compute_launch_state(self):
+        """由目标碰撞速度反解初始摆角和初始角速度。
+
+        杆从 ``theta_start`` 摆到竖直位置 ``pi/2``。重力释放能够提供的
+        最大角速度对应 ``theta_start=0``；若目标速度超过该值，则从 90
+        度摆角出发并补充初始角速度。
+        """
+        L = self.sliders["L"].value
+        g = self.sliders["g"].value
+        target_omega = self.target_angular_speed()
+
+        # sin(theta_start) = 1 - omega_c^2 * L / (3g)。
+        gravity_omega_sq = 3.0 * g / L if g > self.EPS else 0.0
+        target_omega_sq = target_omega * target_omega
+
+        if target_omega <= self.EPS:
+            # 目标速度为零时，杆直接处于竖直最低位置；g=0 也需要这个
+            # 特殊分支，否则通用的“90°出发”状态永远不会到达碰撞位置。
+            theta_start = math.pi / 2.0
+            omega_start = 0.0
+            uses_initial_speed = False
+        elif g > self.EPS and target_omega_sq <= gravity_omega_sq + self.EPS:
+            sin_start = clamp(
+                1.0 - target_omega_sq / gravity_omega_sq, 0.0, 1.0
+            )
+            theta_start = math.asin(sin_start)
+            omega_start = 0.0
+            uses_initial_speed = False
+        else:
+            # theta=0 即相对竖直向下 90 度，剩余速度由初始角速度提供。
+            theta_start = 0.0
+            omega_start = math.sqrt(
+                max(0.0, target_omega_sq - gravity_omega_sq)
+            )
+            uses_initial_speed = target_omega > self.EPS
+
+        angle_from_vertical = math.pi / 2.0 - theta_start
+        return {
+            "theta_start": theta_start,
+            "omega_start": omega_start,
+            "target_omega": target_omega,
+            "angle_from_vertical": angle_from_vertical,
+            "angle_deg": math.degrees(angle_from_vertical),
+            "uses_initial_speed": uses_initial_speed,
+            "gravity_omega_max": math.sqrt(gravity_omega_sq),
+            "h_valid": self.current_h() > self.EPS,
+        }
+
+    def gravity_potential(self, theta=None):
+        if theta is None:
+            theta = self.theta
+        M = self.sliders["M"].value
+        L = self.sliders["L"].value
+        g = self.sliders["g"].value
+        return -M * g * L * math.sin(theta) / 2.0
+
+    def mechanical_energy(self, theta=None, omega=None):
+        if theta is None:
+            theta = self.theta
+        if omega is None:
+            omega = self.omega
+        return 0.5 * self.inertia() * omega * omega + self.gravity_potential(theta)
+
+    def collision_point_speed(self):
+        return abs(self.current_h() * self.omega)
 
     def reset(self, keep_running=False):
+        launch = self.compute_launch_state()
         self.running = keep_running
         self.phase = "ready"
-        self.theta = math.pi / 2
+        self.theta = launch["theta_start"]
+        self.omega = launch["omega_start"]
+        self.initial_theta = launch["theta_start"]
+        self.initial_omega = launch["omega_start"]
+        self.initial_angle_deg = launch["angle_deg"]
+        self.target_omega = launch["target_omega"]
+        self.gravity_omega_max = launch["gravity_omega_max"]
+        self.uses_initial_speed = launch["uses_initial_speed"]
+        self.initial_energy = self.mechanical_energy()
 
-        self.omega = 0.0
-        self.ball_x = self.start_x()
-        self.ball_v = self.sliders["u0"].value
+        # 小球静止在碰撞位置；vc 只表示杆的碰撞点速度，不是小球入射速度。
+        self.ball_x = 0.0
+        self.ball_v = 0.0
         self.t = 0.0
         self.collided = False
 
         self.flash = 0.0
         self.last_result = None
-        self.rod_trail = []
-        self.ball_trail = []
+        self.rod_trail = [self.theta]
+        self.ball_trail = [(self.ball_x, self.current_h())]
         self.particles.clear()
-
         self.shockwaves.clear()
         self.notice = ""
+        if self.current_h() <= self.EPS:
+            self.notice = "碰撞高度 h=0，碰撞点位于转轴，无法定义有效碰撞点速度。"
+        elif self.uses_initial_speed:
+            self.notice = "目标速度超出重力释放范围：已从 90° 摆角加入初始角速度。"
 
     def start_pause(self):
         if self.phase == "ready":
-            self.phase = "approaching"
+            self.phase = "swinging"
         self.running = not self.running
 
     def jump_to_collision(self):
-        self.phase = "approaching"
-
-        self.ball_x = -self.ball_radius_world()
-        self.ball_v = self.sliders["u0"].value
+        """把杆直接置于碰撞瞬间，并使用目标碰撞点速度结算。"""
+        self.theta = math.pi / 2.0
+        self.omega = self.target_omega
+        self.ball_x = 0.0
+        self.ball_v = 0.0
+        self.phase = "swinging"
         self.do_collision()
         self.running = True
 
     def do_collision(self):
         m = self.sliders["m"].value
-
-        M = self.sliders["M"].value
-        L = self.sliders["L"].value
         h = self.current_h()
-        I = M * L * L / 3.0
+        I = self.inertia()
         e = 1.0
         u_before = self.ball_v
-
         omega_before = self.omega
         relative_before = u_before - h * omega_before
         denominator = 1.0 / m + h * h / I
         impulse = -(1.0 + e) * relative_before / denominator
         v_after = u_before + impulse / m
-
         omega_after = omega_before - impulse * h / I
 
         ke_before = 0.5 * m * u_before * u_before + 0.5 * I * omega_before * omega_before
         ke_after = 0.5 * m * v_after * v_after + 0.5 * I * omega_after * omega_after
+        potential = self.gravity_potential(math.pi / 2.0)
 
-        # 绕定轴的有符号角动量。按本程序的坐标/转向约定，
-        # 杆为 I*w，小球为 m*h*v；两者之和应在碰撞瞬间守恒。
+        # 绕定轴的有符号角动量：杆为 I*w，小球为 m*h*v。
         rod_L_before = I * omega_before
         ball_MRV_before = m * h * u_before
-
         total_L_before = rod_L_before + ball_MRV_before
         rod_L_after = I * omega_after
         ball_MRV_after = m * h * v_after
         total_L_after = rod_L_after + ball_MRV_after
 
         self.ball_v = v_after
-
         self.omega = omega_after
+        self.theta = math.pi / 2.0
         self.phase = "after"
         self.collided = True
         self.flash = 1.0
+        self.notice = ""
+        self.post_collision_rod_energy = 0.5 * I * omega_after * omega_after + potential
         self.last_result = {
             "I": I,
             "h": h,
@@ -154,6 +257,9 @@ class BallHitsRod(BaseModel):
             "impulse": impulse,
             "ke_before": ke_before,
             "ke_after": ke_after,
+            "potential": potential,
+            "energy_before": ke_before + potential,
+            "energy_after": ke_after + potential,
             "rod_L_before": rod_L_before,
             "ball_MRV_before": ball_MRV_before,
             "total_L_before": total_L_before,
@@ -164,78 +270,140 @@ class BallHitsRod(BaseModel):
         }
 
         direction = -1.0 if impulse > 0 else 1.0
-        spawn_impact_particles(self.particles, self.shockwaves, 0.0, h,
-                               relative_before, direction=direction, vertical_bias=-0.3)
+        spawn_impact_particles(
+            self.particles, self.shockwaves, 0.0, h,
+            relative_before, direction=direction, vertical_bias=-0.3
+        )
+
+    def _swing_speed(self, theta):
+        """由摆动机械能直接得到当前角速度的正值。"""
+        L = self.sliders["L"].value
+        g = self.sliders["g"].value
+        sin_start = math.sin(self.initial_theta)
+        omega_sq = self.initial_omega ** 2 + 3.0 * g / L * (
+            math.sin(theta) - sin_start
+        )
+        return math.sqrt(max(0.0, omega_sq))
+
+    def _advance_swing(self, dt):
+        """用角加速度速度 Verlet 推进，并投影回初始机械能。
+
+        不能直接积分 ``dtheta/dt=sqrt(...)``：从静止释放时右侧在起点为
+        0，数值积分会错误地把杆卡在起点。因此这里先用动力学方程启动，
+        再用能量关系消除积分误差。
+        """
+        a0 = self._post_acceleration(self.theta)
+        omega_half = self.omega + 0.5 * a0 * dt
+        self.theta += omega_half * dt
+        omega_vv = omega_half + 0.5 * self._post_acceleration(self.theta) * dt
+
+        available = 2.0 * (
+            self.initial_energy - self.gravity_potential(self.theta)
+        ) / self.inertia()
+        magnitude = math.sqrt(max(0.0, available))
+        if abs(omega_vv) > self.EPS:
+            self.omega = math.copysign(magnitude, omega_vv)
+        else:
+            self.omega = 0.0
+
+    def _post_acceleration(self, theta):
+        L = self.sliders["L"].value
+        g = self.sliders["g"].value
+        return 3.0 * g * math.cos(theta) / (2.0 * L)
+
+    def _advance_after_collision(self, dt):
+        """速度 Verlet 推进碰后物理摆，并投影回守恒机械能。"""
+        a0 = self._post_acceleration(self.theta)
+        omega_half = self.omega + 0.5 * a0 * dt
+        self.theta += omega_half * dt
+        omega_vv = omega_half + 0.5 * self._post_acceleration(self.theta) * dt
+
+        # Verlet 决定运动方向，机械能决定速度大小；这样长时间动画不会积累
+        # 可见的能量误差，同时仍保留物理摆的往返运动。
+        energy = getattr(
+            self, "post_collision_rod_energy", self.mechanical_energy()
+        )
+        available = 2.0 * (energy - self.gravity_potential(self.theta)) / self.inertia()
+        magnitude = math.sqrt(max(0.0, available))
+        if abs(omega_vv) > self.EPS:
+            self.omega = math.copysign(magnitude, omega_vv)
+        else:
+            self.omega = 0.0
 
     def step(self, dt):
         if not self.running:
             return
-        h = self.current_h()
-        speed = self.sliders["anim_speed"].value
 
+        speed = self.sliders["anim_speed"].value
         sim_dt = dt * speed
-        self.t += sim_dt
         n = max(1, int(sim_dt / 0.0025))
         sub = sim_dt / n
 
         for _ in range(n):
-            if self.phase == "approaching":
-                old_x = self.ball_x
-                self.ball_x += self.ball_v * sub
-
-                contact_x = -self.ball_radius_world()
-                if old_x < contact_x and self.ball_x >= contact_x:
-                    self.ball_x = contact_x
+            if self.phase == "swinging" and not self.collided:
+                # 目标为零或初始状态已经竖直时，直接进入碰撞结算。
+                if self.theta >= math.pi / 2.0 - self.EPS:
+                    self.theta = math.pi / 2.0
+                    self.omega = self.target_omega
                     self.do_collision()
+                else:
+                    self._advance_swing(sub)
+                    if self.theta >= math.pi / 2.0 - self.EPS:
+                        self.theta = math.pi / 2.0
+                        self.omega = self.target_omega
+                        self.do_collision()
             elif self.phase == "after":
-                # 失重环境：无外力矩，杆角速度保持不变；小球做匀速直线运动。
                 self.ball_x += self.ball_v * sub
-                self.theta += self.omega * sub
+                self._advance_after_collision(sub)
 
-        self.step_particles(dt, gravity=0.0)
+            self.t += sub
 
+        self.step_particles(dt, gravity=self.sliders["g"].value)
         self.flash = max(0.0, self.flash - sim_dt * 2.2)
+
         if not self.rod_trail or abs(self.rod_trail[-1] - self.theta) > 0.010:
             self.rod_trail.append(self.theta)
             if len(self.rod_trail) > 70:
                 self.rod_trail.pop(0)
-        self.ball_trail.append((self.ball_x, h))
+        self.ball_trail.append((self.ball_x, self.current_h()))
         if len(self.ball_trail) > 75:
             self.ball_trail.pop(0)
 
-
     def formula_lines(self):
         return (
-            "L_rod=I*w，MRV=m*h*v",
-            "绕定轴角动量守恒：I*w + m*h*v = constant",
+            "I=ML^2/3，vc=h*wc",
+            "1/2 I*wc^2 = 1/2 I*w0^2 + MgL/2*(1-sin(theta0))",
         )
 
+    def formula_rect(self):
+        return pygame.Rect(690, SIM_H + 218, 528, 52)
+
     def summary_line(self):
-        return (f"失重  m={format_sig3(self.sliders['m'].value)}  M={format_sig3(self.sliders['M'].value)}  "
-                f"L={format_sig3(self.sliders['L'].value)}  h={format_sig3(self.current_h())}  "
-                f"u0={format_sig3(self.sliders['u0'].value)}")
+        mode = "重力释放" if not self.uses_initial_speed else "90°+初始角速度"
+        return (
+            f"g={format_sig3(self.sliders['g'].value)}  "
+            f"vc={format_sig3(self.target_collision_speed())}  "
+            f"初始摆角={format_sig3(self.initial_angle_deg)}°  {mode}"
+        )
 
     def draw_slider_value(self, key, slider):
         if key == "height_ratio":
-            slider.draw(screen, f"h = {format_sig3(self.current_h())} m  ({format_sig3(slider.value)}L)")
+            slider.draw(
+                screen,
+                f"h = {format_sig3(self.current_h())} m  ({format_sig3(slider.value)}L)"
+            )
         else:
             slider.draw(screen)
 
     def draw_scene(self):
         m = self.sliders["m"].value
-        M = self.sliders["M"].value
-
         L = self.sliders["L"].value
         h = self.current_h()
-        I = M * L * L / 3.0
+        I = self.inertia()
         rb = self.ball_radius_world()
-        # 物理长度整体缩小为原版的 1/3，但画面中的视觉尺寸保持接近原版。
-        # 也就是说：当前 L=1 m 对应原版约 L=3 m 的屏幕占用，
-        # 当前最大 L=2 m 对应原版约 L=6 m 的屏幕占用。
-        # 不能简单固定把 px/m 乘 3，否则 L=2 m 时会超出画面；
-        # 因此按“原版等效长度 = 3L”计算自适应比例，再把 px/m 放大 3 倍。
-        physical_scale_ratio = 3.0
 
+        # 物理长度整体缩小为原版的 1/3，但画面中的视觉尺寸保持接近原版。
+        physical_scale_ratio = 3.0
         equivalent_old_L = physical_scale_ratio * L
         old_scale = min(
             145.0,
@@ -243,44 +411,56 @@ class BallHitsRod(BaseModel):
             (SIM_H - 235) / (equivalent_old_L + 0.35),
         )
         scale = physical_scale_ratio * old_scale
-        # 杆放在画面右侧，小球从左侧向右入射。
         pivot = (565, 195)
 
         def w2s(x, y):
             return int(pivot[0] + x * scale), int(pivot[1] + y * scale)
 
         screen.blit(STATIC_BG, (0, 0))
-
-        self.draw_header({"ready": "待开始", "approaching": "小球接近杆", "after": "碰撞后运动"}.get(self.phase, self.phase))
+        self.draw_header({
+            "ready": "待开始",
+            "swinging": "杆摆下并准备碰撞" if not self.collided else "碰撞后物理摆",
+            "after": "碰撞后物理摆",
+        }.get(self.phase, self.phase))
         self.app.draw_mode_tabs()
 
         platform_y = h + rb
         sx1, sy = w2s(min(-1.5 * L, self.ball_x - 0.8 * L), platform_y)
         sx2, _ = w2s(1.25 * L, platform_y)
-
         sx1, sx2 = max(-80, sx1), min(WIDTH + 80, sx2)
         pygame.draw.line(screen, (22, 28, 48), (sx1, sy + 10), (sx2, sy + 10), 10)
         pygame.draw.line(screen, (35, 44, 70), (sx1, sy + 4), (sx2, sy + 4), 8)
         pygame.draw.line(screen, PLATFORM, (sx1, sy), (sx2, sy), 5)
         pygame.draw.line(screen, PLATFORM_TOP, (sx1, sy - 1), (sx2, sy - 1), 2)
-
         for tx in range(max(-40, sx1), min(WIDTH + 40, sx2), 18):
             pygame.draw.line(screen, (100, 115, 155), (tx, sy), (tx + 6, sy + 4), 1)
 
+        # 竖直参考线和碰撞高度标记。
+        ref_x, ref_y = w2s(0.0, L)
+        for y in range(pivot[1] + 4, ref_y, 12):
+            pygame.draw.line(screen, (80, 105, 150), (pivot[0], y),
+                             (pivot[0], min(y + 6, ref_y)), 1)
         hx, hy = w2s(-0.36 * L, h)
         pygame.draw.line(screen, (100, 120, 165), (hx, pivot[1]), (hx, hy), 2)
         pygame.draw.line(screen, (100, 120, 165), (hx - 9, pivot[1]), (hx + 9, pivot[1]), 2)
         pygame.draw.line(screen, (100, 120, 165), (hx - 9, hy), (hx + 9, hy), 2)
+        draw_text(screen, f"h={format_sig3(h)}m", (hx - 10, (pivot[1] + hy) // 2),
+                  FONT_SMALL, MUTED, anchor="midright")
+        draw_text(screen, "竖直碰撞位置", (pivot[0] + 12, ref_y - 20), FONT_SMALL, MUTED)
 
-        draw_text(screen, f"h={format_sig3(h)}m", (hx - 10, (pivot[1] + hy) // 2), FONT_SMALL, MUTED, anchor="midright")
+        # 摆角弧线只在初始侧显示，避免碰撞后绕圈时文字失去可读性。
+        if not self.collided and 0.0 <= self.theta <= math.pi / 2.0:
+            arc_rect = pygame.Rect(pivot[0] - 66, pivot[1] + 16, 132, 132)
+            pygame.draw.arc(screen, ACCENT_2, arc_rect,
+                            math.pi / 2.0, math.pi - self.theta, 2)
+            draw_text(screen, f"ψ={format_sig3(math.degrees(math.pi / 2 - self.theta))}°",
+                      (pivot[0] - 60, pivot[1] + 105), FONT_SMALL, ACCENT_2)
 
         trail_surf_1.fill((0, 0, 0, 0))
-        # 视觉上把杆做细；仅改变绘制宽度，不改变质量、长度或转动惯量。
         rod_w = max(5, int(0.028 * scale))
         for i, theta in enumerate(self.rod_trail):
             p = i / max(1, len(self.rod_trail) - 1)
             end = w2s(-L * math.cos(theta), L * math.sin(theta))
-
             pygame.draw.line(trail_surf_1, (*ROD_GLOW, int(10 + 45 * p)), pivot, end,
                              max(2, int(rod_w * (0.35 + 0.65 * p))))
         screen.blit(trail_surf_1, (0, 0))
@@ -289,29 +469,24 @@ class BallHitsRod(BaseModel):
         glow_surf.fill((0, 0, 0, 0))
         pygame.draw.line(glow_surf, (*ROD_GLOW, 35), pivot, end, rod_w + 12)
         pygame.draw.line(glow_surf, (*ROD_GLOW, 60), pivot, end, rod_w + 5)
-
         screen.blit(glow_surf, (0, 0))
         pygame.draw.line(screen, (0, 0, 0), (pivot[0] + 5, pivot[1] + 7),
                          (end[0] + 5, end[1] + 7), rod_w + 4)
         pygame.draw.line(screen, ROD_COLOR, pivot, end, rod_w)
         pygame.draw.line(screen, ROD_EDGE, pivot, end, max(2, rod_w // 4))
         pygame.draw.circle(screen, (160, 110, 30), end, rod_w // 2 + 3)
-
         pygame.draw.circle(screen, ROD_EDGE, end, max(3, rod_w // 4))
 
         px, py = pivot
         pygame.draw.rect(screen, (38, 48, 76), (px - 24, py - 38, 14, 76), border_radius=5)
         pygame.draw.circle(screen, (5, 8, 18), (px + 3, py + 4), 26)
         pygame.draw.circle(screen, (50, 62, 95), pivot, 24)
-
         pygame.draw.circle(screen, (28, 38, 64), pivot, 20)
         pygame.draw.circle(screen, (65, 82, 128), pivot, 16)
         pygame.draw.circle(screen, ACCENT, pivot, 6)
         pygame.draw.circle(screen, (210, 240, 255), pivot, 3)
 
-        # 角速度固定显示在定轴旁，避免随杆转动而移动。
-        w_rect = pygame.Rect(px + 32, py - 30, 190, 34)
-
+        w_rect = pygame.Rect(px + 32, py - 30, 210, 34)
         rounded_rect(screen, w_rect, (12, 20, 38), 9, 1, (70, 95, 145))
         draw_text(screen, f"w = {format_sig3(self.omega)} rad/s", w_rect.center,
                   FONT_SMALL, ACCENT_3, anchor="center")
@@ -320,6 +495,9 @@ class BallHitsRod(BaseModel):
         pygame.draw.circle(screen, ACCENT_2, (cpx, cpy), 9, 2)
         pygame.draw.circle(screen, (255, 255, 255), (cpx, cpy), 4)
 
+        # 重力方向示意箭头。
+        gx, gy = w2s(-0.5 * L * math.cos(self.theta), 0.5 * L * math.sin(self.theta))
+        draw_arrow(screen, (gx, gy), (gx, gy + int(0.20 * scale)), ACCENT_3, 2)
 
         trail_surf_2.fill((0, 0, 0, 0))
         for i, (bx, by) in enumerate(self.ball_trail):
@@ -328,8 +506,6 @@ class BallHitsRod(BaseModel):
             if -100 <= pos[0] <= WIDTH + 100:
                 r = max(2, int(rb * scale * (0.22 + 0.40 * p)))
                 pygame.draw.circle(trail_surf_2, (*BALL1_GLOW, int(12 + 75 * p)), pos, r + 3)
-
-                pygame.draw.circle(trail_surf_2, (*BALL1_COLOR, int(12 + 75 * p)), pos, r)
         screen.blit(trail_surf_2, (0, 0))
 
         particle_surf.fill((0, 0, 0, 0))
@@ -339,36 +515,35 @@ class BallHitsRod(BaseModel):
             wave.draw(particle_surf, w2s, scale)
         screen.blit(particle_surf, (0, 0))
 
-
         ball_pos = w2s(self.ball_x, h)
         br = max(12, int(rb * scale))
         pygame.draw.ellipse(screen, (0, 0, 0),
-                            (ball_pos[0] - br - 4, sy - max(3, br // 4), 2 * br + 8, max(6, br // 2)))
+                            (ball_pos[0] - br - 4, sy - max(3, br // 4),
+                             2 * br + 8, max(6, br // 2)))
         glow_surf.fill((0, 0, 0, 0))
         pygame.draw.circle(glow_surf, (*BALL1_GLOW, 28), ball_pos, br + 20)
-
         pygame.draw.circle(glow_surf, (*BALL1_GLOW, 45), ball_pos, br + 12)
         screen.blit(glow_surf, (0, 0))
         pygame.draw.circle(screen, (4, 10, 23), (ball_pos[0] + 4, ball_pos[1] + 5), br + 2)
         pygame.draw.circle(screen, BALL1_COLOR, ball_pos, br)
         pygame.draw.circle(screen, (31, 125, 190), ball_pos, br, 2)
-
         pygame.draw.circle(screen, BALL1_EDGE,
                            (ball_pos[0] - br // 3, ball_pos[1] - br // 3), max(3, br // 4))
         pygame.draw.circle(screen, (255, 255, 255),
-                           (ball_pos[0] - br // 3 - 1, ball_pos[1] - br // 3 - 1), max(2, br // 7))
+                           (ball_pos[0] - br // 3 - 1, ball_pos[1] - br // 3 - 1),
+                           max(2, br // 7))
 
         if self.flash > 0:
             contact = w2s(0.0, h)
             flash_surf.fill((0, 0, 0, 0))
             f = self.flash
-
             r0 = int(clamp((1.15 - f) * 80 + 10, 5, 90))
             a0 = int(220 * f)
             pygame.draw.circle(flash_surf, (255, 255, 255, a0), contact, r0)
-            pygame.draw.circle(flash_surf, (255, 210, 80, int(a0 * 0.45)), contact, r0 + int(30 * f))
-            pygame.draw.circle(flash_surf, (120, 180, 255, int(a0 * 0.20)), contact, r0 + int(55 * f))
-
+            pygame.draw.circle(flash_surf, (255, 210, 80, int(a0 * 0.45)),
+                               contact, r0 + int(30 * f))
+            pygame.draw.circle(flash_surf, (120, 180, 255, int(a0 * 0.20)),
+                               contact, r0 + int(55 * f))
             screen.blit(flash_surf, (0, 0))
 
         if abs(self.ball_v) > 0.01:
@@ -377,31 +552,35 @@ class BallHitsRod(BaseModel):
             ay = ball_pos[1] - br - 12
             finish = (int(ball_pos[0] + direction * arrow_len), ay)
             draw_arrow(screen, (ball_pos[0], ay), finish, GREEN, 3)
-
             draw_text(screen, f"v={format_sig3(self.ball_v)} m/s",
-                      (finish[0] + (10 if direction > 0 else -10), ay - 12), FONT_SMALL, GREEN,
-                      anchor="topleft" if direction > 0 else "topright")
+                      (finish[0] + (10 if direction > 0 else -10), ay - 12), FONT_SMALL,
+                      GREEN, anchor="topleft" if direction > 0 else "topright")
+        elif not self.collided:
+            draw_text(screen, "小球静止等待碰撞", (245, 205), FONT_SMALL, ACCENT_3)
 
-        if not self.collided:
-            draw_text(screen, f"入射速率 u0={format_sig3(self.sliders['u0'].value)} m/s",
-                      (245, 205), FONT_SMALL, ACCENT_3)
+        if self.notice:
+            notice_rect = pygame.Rect(38, 192, 730, 40)
+            rounded_rect(screen, notice_rect, (62, 28, 38), 10, 1, (145, 65, 80))
+            draw_text(screen, self.notice, notice_rect.center,
+                      FONT_SMALL, (255, 185, 190), anchor="center")
 
         rod_L_now = I * self.omega
         ball_MRV_now = m * h * self.ball_v
         total_L_now = rod_L_now + ball_MRV_now
-
         current_lines = [
+            f"重力加速度 g = {format_sig3(self.sliders['g'].value)} m/s^2",
             f"转动惯量 I = {format_sig3(I)} kg*m^2",
-            f"小球速度 v = {format_sig3(self.ball_v)} m/s",
+            f"摆角 ψ = {format_sig3(math.degrees(math.pi / 2 - self.theta))}°",
             f"杆角速度 w = {format_sig3(self.omega)} rad/s",
-            f"杆角动量 I*w = {format_sig3(rod_L_now)} kg*m^2/s",
-            f"小球 MRV=m*h*v = {format_sig3(ball_MRV_now)} kg*m^2/s",
+            f"碰撞点速率 h*w = {format_sig3(self.collision_point_speed())} m/s",
+            f"机械能 E = {format_sig3(self.mechanical_energy())} J",
             f"总角动量 = {format_sig3(total_L_now)} kg*m^2/s",
         ]
         collision_lines = None
         if self.last_result:
             r = self.last_result
             collision_lines = [
+                f"目标碰撞点速率 = {format_sig3(self.target_collision_speed())} m/s",
                 f"碰撞时刻 t = {format_sig3(r['impact_time'])} s",
                 f"碰前杆角动量 = {format_sig3(r['rod_L_before'])}",
                 f"碰前小球 MRV = {format_sig3(r['ball_MRV_before'])}",
@@ -410,8 +589,14 @@ class BallHitsRod(BaseModel):
                 f"碰后小球 MRV = {format_sig3(r['ball_MRV_after'])}",
                 f"碰后总角动量 = {format_sig3(r['total_L_after'])}",
                 f"角动量误差 = {format_sig3(abs(r['total_L_after'] - r['total_L_before']))}",
-                f"能量误差 = {format_sig3(abs(r['ke_after'] - r['ke_before']))} J",
+                f"能量误差 = {format_sig3(abs(r['energy_after'] - r['energy_before']))} J",
             ]
-        self.draw_info_panel(current_lines, collision_lines,
-                             ["失重：碰后杆做匀角速度转动", "MRV 中 R=h，为小球到定轴的垂直距离", "按 C 直接显示碰撞结果"],
-                             ("碰后总角动量", "角动量误差", "能量误差"))
+        self.draw_info_panel(
+            current_lines, collision_lines,
+            [
+                "小球静止于杆的碰撞高度，vc 是杆碰撞点线速度",
+                "ψ 从竖直向下方向量起，0°--90° 可由重力释放",
+                "超出范围时自动使用 90° 摆角和初始角速度",
+            ],
+            ("目标碰撞点速率", "碰后总角动量", "角动量误差", "能量误差")
+        )
