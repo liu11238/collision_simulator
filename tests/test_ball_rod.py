@@ -92,6 +92,20 @@ class BallRodTest(unittest.TestCase):
         self.assertAlmostEqual(result["relative_after"],
                                -result["relative_before"], places=10)
 
+    def test_restitution_coefficient(self):
+        model = self.make_model(vc=3.0, h=0.72, e=0.5)
+        model.jump_to_collision()
+        result = model.last_result
+        self.assertAlmostEqual(result["e"], 0.5, places=12)
+        self.assertAlmostEqual(
+            result["relative_after"],
+            -0.5 * result["relative_before"],
+            places=10,
+        )
+        self.assertAlmostEqual(result["total_L_before"],
+                               result["total_L_after"], places=10)
+        self.assertLess(result["energy_after"], result["energy_before"])
+
     def test_zero_target_speed_stays_at_collision_position(self):
         model = self.make_model(vc=0.0, g=0.0)
         self.assertAlmostEqual(model.initial_angle_deg, 0.0, places=12)

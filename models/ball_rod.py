@@ -42,6 +42,7 @@ class BallHitsRod(BaseModel):
         self.add_control("L", "杆长 L", 1, 0, 0.25, 2.00, 1.00, " m", 3)
         self.add_control("height_ratio", "碰撞高度 h/L", 1, 1, 0.00, 1.00, 0.72, "", 4)
         self.add_control("anim_speed", "动画速度", 1, 2, 0.20, 2.50, 1.00, "x", 2)
+        self.add_control("e", "恢复系数 e", 1, 3, 0.00, 1.00, 1.00, "", 3)
 
         # h 仍然保留精确输入，但滑块用 h/L 表示，便于同时调整 L 和碰撞位置。
         self.input_boxes.pop("height_ratio")
@@ -62,6 +63,7 @@ class BallHitsRod(BaseModel):
             "L": self.sliders["L"].value,
             "h": self.current_h(),
             "anim_speed": self.sliders["anim_speed"].value,
+            "e": self.sliders["e"].value,
         }
 
     def set_control_value(self, key, value):
@@ -192,8 +194,6 @@ class BallHitsRod(BaseModel):
         self.notice = ""
         if self.current_h() <= self.EPS:
             self.notice = "碰撞高度 h=0，碰撞点位于转轴，无法定义有效碰撞点速度。"
-        elif self.uses_initial_speed:
-            self.notice = "目标速度超出重力释放范围：已从 90° 摆角加入初始角速度。"
 
     def start_pause(self):
         if self.phase == "ready":
@@ -214,7 +214,7 @@ class BallHitsRod(BaseModel):
         m = self.sliders["m"].value
         h = self.current_h()
         I = self.inertia()
-        e = 1.0
+        e = self.sliders["e"].value
         u_before = self.ball_v
         omega_before = self.omega
         relative_before = u_before - h * omega_before
@@ -246,6 +246,7 @@ class BallHitsRod(BaseModel):
         self.last_result = {
             "I": I,
             "h": h,
+            "e": e,
             "u_before": u_before,
             "v_after": v_after,
             "omega_before": omega_before,
@@ -371,8 +372,8 @@ class BallHitsRod(BaseModel):
 
     def formula_lines(self):
         return (
-            "I=ML^2/3，vc=h*wc",
-            "1/2 I*wc^2 = 1/2 I*w0^2 + MgL/2*(1-sin(theta0))",
+            "I=ML^2/3，vc=h*wc，J=-(1+e)(v-hw)/(1/m+h^2/I)",
+            "v'-hw'=-e(v-hw)；1/2 I*wc^2 = 1/2 I*w0^2 + MgL/2*(1-sin(theta0))",
         )
 
     def formula_rect(self):
@@ -448,13 +449,26 @@ class BallHitsRod(BaseModel):
                   FONT_SMALL, MUTED, anchor="midright")
         draw_text(screen, "竖直碰撞位置", (pivot[0] + 12, ref_y - 20), FONT_SMALL, MUTED)
 
-        # 摆角弧线只在初始侧显示，避免碰撞后绕圈时文字失去可读性。
+        # 摆角弧线以转轴为圆心，显示竖直向下方向与细杆之间的夹角。
         if not self.collided and 0.0 <= self.theta <= math.pi / 2.0:
-            arc_rect = pygame.Rect(pivot[0] - 66, pivot[1] + 16, 132, 132)
+            arc_radius = 66
+            arc_rect = pygame.Rect(
+                pivot[0] - arc_radius, pivot[1] - arc_radius,
+                2 * arc_radius, 2 * arc_radius,
+            )
             pygame.draw.arc(screen, ACCENT_2, arc_rect,
-                            math.pi / 2.0, math.pi - self.theta, 2)
-            draw_text(screen, f"ψ={format_sig3(math.degrees(math.pi / 2 - self.theta))}°",
-                      (pivot[0] - 60, pivot[1] + 105), FONT_SMALL, ACCENT_2)
+                            math.pi + self.theta, 1.5 * math.pi, 2)
+            bisector = 1.25 * math.pi + 0.5 * self.theta
+            label_radius = arc_radius + 18
+            label_pos = (
+                pivot[0] + int(label_radius * math.cos(bisector)),
+                pivot[1] - int(label_radius * math.sin(bisector)),
+            )
+            draw_text(
+                screen,
+                f"ψ={format_sig3(math.degrees(math.pi / 2 - self.theta))}°",
+                label_pos, FONT_SMALL, ACCENT_2, anchor="center",
+            )
 
         trail_surf_1.fill((0, 0, 0, 0))
         rod_w = max(5, int(0.028 * scale))
@@ -582,6 +596,7 @@ class BallHitsRod(BaseModel):
             collision_lines = [
                 f"目标碰撞点速率 = {format_sig3(self.target_collision_speed())} m/s",
                 f"碰撞时刻 t = {format_sig3(r['impact_time'])} s",
+                f"恢复系数 e = {format_sig3(r['e'])}",
                 f"碰前杆角动量 = {format_sig3(r['rod_L_before'])}",
                 f"碰前小球 MRV = {format_sig3(r['ball_MRV_before'])}",
                 f"碰前总角动量 = {format_sig3(r['total_L_before'])}",
@@ -598,5 +613,5 @@ class BallHitsRod(BaseModel):
                 "ψ 从竖直向下方向量起，0°--90° 可由重力释放",
                 "超出范围时自动使用 90° 摆角和初始角速度",
             ],
-            ("目标碰撞点速率", "碰后总角动量", "角动量误差", "能量误差")
+            ("目标碰撞点速率", "恢复系数", "碰后总角动量", "角动量误差", "能量误差")
         )
