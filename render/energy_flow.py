@@ -37,7 +37,7 @@ def draw_energy_flow(surface, rect, account, title="能量账本"):
         y += 17
         pygame.draw.rect(surface, (27, 38, 66), (bar_x, y, bar_w, 7), border_radius=3)
         width = int(bar_w * clamp(value / total, 0.0, 1.0))
-        if width:
+        if width and value > 1e-12:
             pygame.draw.rect(surface, color, (bar_x, y, width, 7), border_radius=3)
         y += 13
 

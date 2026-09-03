@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from models.ball_rod import BallHitsRod  # noqa: E402
+from models.ball_ball import BallBallCollision  # noqa: E402
 
 
 class BallRodTest(unittest.TestCase):
@@ -49,9 +50,9 @@ class BallRodTest(unittest.TestCase):
         self.assertGreater(model.initial_angle_deg, 0.0)
         self.assertLess(model.initial_angle_deg, 90.0)
 
-        expected = -model.sliders["M"].value * model.sliders["g"].value
+        expected = model.sliders["M"].value * model.sliders["g"].value
         expected *= model.sliders["L"].value / 2.0
-        expected *= math.sin(model.initial_theta)
+        expected *= 1.0 - math.sin(model.initial_theta)
         self.assertAlmostEqual(model.initial_energy, expected, places=10)
 
         model.phase = "swinging"
@@ -65,6 +66,54 @@ class BallRodTest(unittest.TestCase):
             abs(model.last_result["energy_before"] - model.initial_energy),
             1e-9,
         )
+
+    def test_potential_zero_and_percussion_center(self):
+        model = self.make_model(g=9.8, L=1.2)
+        self.assertAlmostEqual(model.gravity_potential(math.pi / 2.0), 0.0, places=12)
+        self.assertGreater(model.gravity_potential(0.0), 0.0)
+        self.assertAlmostEqual(model.percussion_center(), 2.0 * 1.2 / 3.0, places=12)
+
+    def test_damping_torque_has_viscous_sign_and_units(self):
+        model = self.make_model(b=0.04)
+        self.assertAlmostEqual(model.damping_torque(2.5), -0.1, places=12)
+        self.assertAlmostEqual(model.damping_torque(-2.5), 0.1, places=12)
+
+    def test_percussion_center_has_zero_pivot_impulse(self):
+        model = self.make_model(vc=3.0, h=2.0 / 3.0)
+        model.jump_to_collision()
+        self.assertAlmostEqual(model.last_result.pivot_impulse, 0.0, places=10)
+
+    def test_both_models_keep_physical_substeps_under_limit(self):
+        rod = self.make_model(anim_speed=2.5)
+        rod.jump_to_collision()
+        rod_steps = []
+        original_rod_step = rod._advance_simulation_substep
+
+        def record_rod_step(sub):
+            rod_steps.append(sub)
+            original_rod_step(sub)
+
+        rod._advance_simulation_substep = record_rod_step
+        rod.step(1.0 / 240.0)
+        self.assertEqual(len(rod_steps), 5)
+        self.assertLessEqual(max(rod_steps), rod.MAX_SUBSTEP)
+
+        balls = BallBallCollision()
+        balls.set_control_value("anim_speed", 2.5)
+        balls.reset()
+        balls.phase = "moving"
+        balls.running = True
+        ball_steps = []
+        original_ball_step = balls._advance_simulation_substep
+
+        def record_ball_step(sub):
+            ball_steps.append(sub)
+            original_ball_step(sub)
+
+        balls._advance_simulation_substep = record_ball_step
+        balls.step(1.0 / 240.0)
+        self.assertEqual(len(ball_steps), 5)
+        self.assertLessEqual(max(ball_steps), balls.MAX_SUBSTEP)
 
     def test_excess_speed_uses_90_degree_plus_initial_speed(self):
         model = self.make_model(vc=10.0, h=0.8, g=9.8)

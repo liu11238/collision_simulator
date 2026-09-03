@@ -21,6 +21,7 @@ class BallBallCollision(BaseModel):
     name = "两自由质点弹性碰撞仿真"
     short_name = "两自由质点"
     BALL_RADIUS_WORLD = 0.34
+    MAX_SUBSTEP = 0.0025
 
     def build_controls(self):
         self.add_control("m1", "左球质量 m1", 0, 0, 0.05, 10.0, 1.00, " kg", 3)
@@ -126,30 +127,34 @@ class BallBallCollision(BaseModel):
                                relative_before, symmetric=True)
 
 
+    def _advance_simulation_substep(self, sub):
+        r = self.BALL_RADIUS_WORLD
+
+        old_x1, old_x2 = self.x1, self.x2
+        self.x1 += self.v1 * sub
+        self.x2 += self.v2 * sub
+        if not self.collided and self.v1 > self.v2:
+            old_gap = (old_x2 - r) - (old_x1 + r)
+
+            new_gap = (self.x2 - r) - (self.x1 + r)
+            if old_gap > 0.0 and new_gap <= 0.0:
+                contact_x = ((self.x1 + r) + (self.x2 - r)) / 2.0
+                self.x1 = contact_x - r
+                self.x2 = contact_x + r
+                self.do_collision(contact_x)
+
     def step(self, dt):
         if not self.running:
             return
         speed = self.sliders["anim_speed"].value
         sim_dt = dt * speed
         self.t += sim_dt
-        n = max(1, int(sim_dt / 0.0025))
+        # 使用 ceil 保证每一个物理子步都不超过 MAX_SUBSTEP。
+        n = max(1, math.ceil(sim_dt / self.MAX_SUBSTEP))
 
         sub = sim_dt / n
-        r = self.BALL_RADIUS_WORLD
-
         for _ in range(n):
-            old_x1, old_x2 = self.x1, self.x2
-            self.x1 += self.v1 * sub
-            self.x2 += self.v2 * sub
-            if not self.collided and self.v1 > self.v2:
-                old_gap = (old_x2 - r) - (old_x1 + r)
-
-                new_gap = (self.x2 - r) - (self.x1 + r)
-                if old_gap > 0.0 and new_gap <= 0.0:
-                    contact_x = ((self.x1 + r) + (self.x2 - r)) / 2.0
-                    self.x1 = contact_x - r
-                    self.x2 = contact_x + r
-                    self.do_collision(contact_x)
+            self._advance_simulation_substep(sub)
 
 
         self.step_particles(dt, gravity=0.0)
