@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-WIDTH, HEIGHT = 1280, 960
+WIDTH, HEIGHT = 1280, 1080
 FPS = 60
-UI_H = 340
+UI_H = 420
 SIM_H = HEIGHT - UI_H
 
 

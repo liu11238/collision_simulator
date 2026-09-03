@@ -17,6 +17,7 @@ from effects.particles import spawn_impact_particles
 from models.base import BaseModel
 from models.collision_data import CollisionSnapshot
 from presentation.collision_explainer import CollisionExplainer
+from replay.timeline import ReplayFrame, ReplayTimeline
 from render.primitives import draw_arrow, draw_text, rounded_rect
 from render.energy_flow import draw_energy_flow
 from ui.widgets import InputBox
@@ -39,6 +40,12 @@ class BallHitsRod(BaseModel):
     control_row_height = 42
     supports_impact_explanation = True
 
+    def __init__(self):
+        self.replay = ReplayTimeline()
+        self.replay_mode = False
+        self.replay_side = "after"
+        super().__init__()
+
     def build_controls(self):
         self.add_control("m", "小球质量 m", 0, 0, 0.05, 10.0, 1.00, " kg", 3)
         self.add_control("M", "杆质量 M", 0, 1, 0.10, 20.0, 4.00, " kg", 3)
@@ -49,7 +56,7 @@ class BallHitsRod(BaseModel):
         self.add_control("height_ratio", "碰撞高度 h/L", 1, 1, 0.00, 1.00, 0.72, "", 4)
         self.add_control("anim_speed", "动画速度", 1, 2, 0.20, 2.50, 1.00, "x", 2)
         self.add_control("e", "恢复系数 e", 1, 3, 0.00, 1.00, 1.00, "", 3)
-        self.add_control("b", "转轴黏性阻尼 b", 0, 4, 0.00, 0.050, 0.000, " N*m*s", 4)
+        self.add_control("tau0", "恒定摩擦矩 τ0", 0, 4, 0.00, 0.500, 0.000, " N*m", 4)
 
         # h 仍然保留精确输入，但滑块用 h/L 表示，便于同时调整 L 和碰撞位置。
         self.input_boxes.pop("height_ratio")
@@ -72,10 +79,14 @@ class BallHitsRod(BaseModel):
             "h": self.current_h(),
             "anim_speed": self.sliders["anim_speed"].value,
             "e": self.sliders["e"].value,
-            "b": self.sliders["b"].value,
+            "tau0": self.sliders["tau0"].value,
         }
 
     def set_control_value(self, key, value):
+        # b 是上一版本的参数名，保留它作为 tau0 的兼容别名；物理含义
+        # 已经改为恒定摩擦矩，不再执行 tau=-b*omega。
+        if key == "b":
+            key = "tau0"
         if key == "L":
             old_h = self.current_h()
             self.sliders["L"].set_value(value)
@@ -93,20 +104,109 @@ class BallHitsRod(BaseModel):
     def ball_radius_world(self):
         return 0.055 * self.sliders["L"].value
 
+    def _replay_frame(self, *, phase=None, theta=None, omega=None,
+                      ball_x=None, ball_v=None, collision=None,
+                      event=None, collision_id=None):
+        """将当前或显式指定的展示状态复制为只读回放帧。"""
+        theta = self.theta if theta is None else theta
+        omega = self.omega if omega is None else omega
+        ball_x = self.ball_x if ball_x is None else ball_x
+        ball_v = self.ball_v if ball_v is None else ball_v
+        phase = self.phase if phase is None else phase
+        potential = self.gravity_potential(theta)
+        rod_energy = 0.5 * self.inertia() * omega * omega + potential
+        ball_energy = 0.5 * self.sliders["m"].value * ball_v * ball_v
+        total_energy = rod_energy + ball_energy
+        angular_momentum = self.inertia() * omega + (
+            self.sliders["m"].value * self.current_h() * ball_v
+        )
+        return ReplayFrame(
+            time=self.t,
+            phase=phase,
+            theta=theta,
+            omega=omega,
+            ball_x=ball_x,
+            ball_v=ball_v,
+            mechanical_energy=rod_energy,
+            total_energy=total_energy,
+            friction_energy=self.damping_energy,
+            angular_momentum=angular_momentum,
+            collision=collision,
+            collision_id=collision_id,
+            event=event,
+        )
+
+    def _record_replay_sample(self, force=False):
+        self.replay.record_sample(self._replay_frame(), force=force)
+
+    def replay_frame(self, time=None, side=None):
+        """取得回放展示帧；回放关闭时返回 None。"""
+        if not self.replay_mode:
+            return None
+        return self.replay.frame_at(
+            self.replay.cursor if time is None else time,
+            side=side or self.replay_side,
+        )
+
+    def replay_collision_snapshot(self, frame=None):
+        """返回当前回放游标之前最近一次碰撞的快照。"""
+        if frame is None:
+            frame = self.replay_frame()
+        if frame is None:
+            return None
+        if frame.collision is not None:
+            return frame.collision
+        cutoff = self.replay.cursor + 1e-10
+        for candidate in reversed(self.replay.frames):
+            if candidate.time <= cutoff and candidate.collision is not None:
+                return candidate.collision
+        return None
+
+    def seek_replay(self, time, side="after"):
+        if not self.replay.has_frames:
+            return None
+        self.replay_mode = True
+        self.replay_side = side
+        self.replay.playing = False
+        return self.replay.seek(time, side=side)
+
+    def toggle_replay(self):
+        if not self.replay.has_frames:
+            return False
+        self.replay_mode = True
+        return self.replay.toggle()
+
+    def leave_replay(self):
+        self.replay_mode = False
+        self.replay.playing = False
+        self.replay.go_live()
+
+    def replay_playback_step(self, dt):
+        if not self.replay_mode:
+            return None
+        return self.replay.step_playback(dt)
+
     def inertia(self):
         M = self.sliders["M"].value
         L = self.sliders["L"].value
         return M * L * L / 3.0
 
-    def damping_coefficient(self):
-        """碰撞后的线性黏性转轴阻尼系数 ``b``。"""
-        return self.sliders["b"].value
+    def friction_moment(self):
+        """返回库仑型恒定转轴摩擦矩 ``tau0``，单位为 N*m。"""
+        return self.sliders["tau0"].value
 
-    def damping_torque(self, omega=None):
-        """返回黏性阻尼力矩 ``tau_b = -b*omega``，单位为 N*m。"""
+    def friction_torque(self, omega=None):
+        """返回始终阻碍转动的恒定摩擦矩 ``-tau0*sign(omega)``。"""
         if omega is None:
             omega = self.omega
-        return -self.damping_coefficient() * omega
+        if abs(omega) <= self.EPS:
+            return 0.0
+        return -self.friction_moment() * math.copysign(1.0, omega)
+
+    # 旧展示代码和外部调用仍使用 damping 名称；它们现在指向恒定摩擦，
+    # 而不是旧版的线性黏性阻尼。
+    damping_coefficient = friction_moment
+    damping_torque = friction_torque
 
     def percussion_center(self):
         """均匀细杆的打击中心（相对转轴的距离）。
@@ -220,7 +320,13 @@ class BallHitsRod(BaseModel):
             "residual": residual,
             "collision_energy_loss": collision,
             "damping_energy": damping,
+            "friction": damping,
+            "friction_energy": damping,
         }
+
+    @property
+    def friction_energy(self):
+        return self.damping_energy
 
     def collision_point_speed(self):
         if self.phase == "impact_explain" and self.collision_snapshot is not None:
@@ -229,6 +335,9 @@ class BallHitsRod(BaseModel):
 
     def reset(self, keep_running=False):
         launch = self.compute_launch_state()
+        self.replay.clear()
+        self.replay_mode = False
+        self.replay_side = "after"
         self.running = keep_running
         self.phase = "ready"
         self.theta = launch["theta_start"]
@@ -262,10 +371,14 @@ class BallHitsRod(BaseModel):
         self.particles.clear()
         self.shockwaves.clear()
         self.notice = ""
+        self._record_replay_sample(force=True)
         if self.current_h() <= self.EPS:
             self.notice = "碰撞高度 h=0，碰撞点位于转轴，无法定义有效碰撞点速度。"
 
     def start_pause(self):
+        if self.replay_mode:
+            self.toggle_replay()
+            return
         if self.phase == "impact_explain":
             self.skip_explanation()
             return
@@ -293,6 +406,17 @@ class BallHitsRod(BaseModel):
             explain = self.explain_enabled
         result = self.solve_collision()
         self.collision_snapshot = result
+        before_frame = self._replay_frame(
+            phase="swinging", theta=result.theta_before,
+            omega=result.omega_before, ball_v=self.ball_v,
+            collision=result,
+        )
+        after_frame = self._replay_frame(
+            phase="after", theta=math.pi / 2.0,
+            omega=result.omega_after, ball_v=result.v_after,
+            collision=result,
+        )
+        self.replay.record_collision(before_frame, after_frame)
         if explain:
             # 快照对外可见，但碰后运动状态仍冻结到讲解结束。
             self.collided = True
@@ -415,6 +539,10 @@ class BallHitsRod(BaseModel):
         self.collision_energy_loss = result.collision_energy_loss
         self.camera_zoom = 1.0
         self.camera_focus = None
+        if (not self.replay.frames
+                or self.t > self.replay.frames[-1].time + 1e-10
+                or self.replay.frames[-1].event is None):
+            self._record_replay_sample(force=True)
 
         if spawn_fx:
             direction = -1.0 if result.impulse > 0 else 1.0
@@ -460,16 +588,26 @@ class BallHitsRod(BaseModel):
         return 3.0 * g * math.cos(theta) / (2.0 * L)
 
     def _after_derivatives(self, theta, omega):
-        """碰撞后状态方程及阻尼耗散功率。
+        """碰撞后状态方程及恒定摩擦耗散功率。
 
-        碰撞前仍使用解析能量反解；阻尼只从碰撞瞬间开始计入，避免改变
+        碰撞前仍使用解析能量反解；摩擦只从碰撞瞬间开始计入，避免改变
         原有的碰撞前速度和瞬时冲量公式。
         """
         inertia = self.inertia()
         acceleration = self._post_acceleration(theta)
-        acceleration += self.damping_torque(omega) / inertia
-        dissipation_power = self.damping_coefficient() * omega * omega
+        acceleration += self.friction_torque(omega) / inertia
+        dissipation_power = self.friction_moment() * abs(omega)
         return omega, acceleration, dissipation_power
+
+    def _can_stick(self, theta, omega):
+        """判断杆是否已进入静摩擦可维持的低速平衡。"""
+        if self.friction_moment() <= self.EPS or abs(omega) > 2.0e-3:
+            return False
+        gravity_torque = abs(self.sliders["M"].value
+                             * self.sliders["g"].value
+                             * self.sliders["L"].value
+                             * math.cos(theta) / 2.0)
+        return gravity_torque <= self.friction_moment() + 1e-10
 
     def _advance_after_collision(self, dt):
         """用 RK4 推进碰撞后的 ``theta``、``omega`` 和耗散能。"""
@@ -498,6 +636,12 @@ class BallHitsRod(BaseModel):
         self.damping_energy = dissipated0 + dt * (
             k1[2] + 2.0 * k2[2] + 2.0 * k3[2] + k4[2]
         ) / 6.0
+        if self._can_stick(self.theta, self.omega):
+            # 把本子步内剩余的微小动能也计入摩擦账本，避免“钳零”凭空
+            # 制造或删除能量；势能保持在当前位置。
+            kinetic_before_lock = 0.5 * self.inertia() * self.omega ** 2
+            self.damping_energy += kinetic_before_lock
+            self.omega = 0.0
 
     def _advance_simulation_substep(self, sub):
         if self.phase == "swinging" and not self.collided:
@@ -528,6 +672,10 @@ class BallHitsRod(BaseModel):
         self.camera_zoom = 1.0 + 0.24 * self.impact_explainer.focus_strength()
 
     def step(self, dt):
+        if self.replay_mode:
+            self.replay_playback_step(dt)
+            return
+
         if not self.running:
             return
 
@@ -562,11 +710,12 @@ class BallHitsRod(BaseModel):
         self.ball_trail.append((self.ball_x, self.current_h()))
         if len(self.ball_trail) > 75:
             self.ball_trail.pop(0)
+        self._record_replay_sample()
 
     def formula_lines(self):
         return (
             "I=ML^2/3，vc=h*wc，J=-(1+e)(v-hw)/(1/m+h^2/I)",
-            "碰后：I*w' = MgL*cos(theta)/2 + tau_b，tau_b=-b*w；U=MgL(1-sin(theta))/2",
+            "碰后：I*w' = MgL*cos(theta)/2 + tau_f，tau_f=-tau0*sign(w)；U=MgL(1-sin(theta))/2",
         )
 
     def formula_rect(self):
@@ -607,16 +756,63 @@ class BallHitsRod(BaseModel):
         scale = physical_scale_ratio * old_scale
         pivot = (565, 195)
 
-        explainer = self.impact_explainer if self.phase == "impact_explain" else None
-        display_ball_x = explainer.ball_x_display() if explainer else self.ball_x
-        display_ball_v = explainer.ball_v_display() if explainer else self.ball_v
-        display_omega = explainer.rod_omega_display() if explainer else self.omega
+        explainer = (
+            self.impact_explainer
+            if self.phase == "impact_explain" and not self.replay_mode
+            else None
+        )
+        replay_frame = self.replay_frame()
+        replay_active = replay_frame is not None
+        display_collision = (
+            self.replay_collision_snapshot(replay_frame)
+            if replay_active
+            else self.collision_snapshot
+        )
+        display_theta = (
+            replay_frame.theta if replay_frame is not None else self.theta
+        )
+        display_ball_x = (
+            replay_frame.ball_x if replay_frame is not None
+            else explainer.ball_x_display() if explainer else self.ball_x
+        )
+        display_ball_v = (
+            replay_frame.ball_v if replay_frame is not None
+            else explainer.ball_v_display() if explainer else self.ball_v
+        )
+        display_omega = (
+            replay_frame.omega if replay_frame is not None
+            else explainer.rod_omega_display() if explainer else self.omega
+        )
         display_contact_speed = (
             explainer.contact_speed_display()
-            if explainer else h * self.omega
+            if explainer else h * display_omega
         )
+        display_phase = replay_frame.phase if replay_active else self.phase
+        display_collided = display_phase in {"after", "impact_explain"}
+        display_friction_energy = (
+            replay_frame.friction_energy if replay_active else self.damping_energy
+        )
+        if replay_active:
+            display_account = {
+                "initial": self.initial_energy,
+                "mechanical": replay_frame.total_energy,
+                "collision": (
+                    display_collision.collision_energy_loss
+                    if display_collision is not None and display_phase == "after"
+                    else 0.0
+                ),
+                "damping": display_friction_energy,
+                "residual": self.initial_energy - replay_frame.total_energy
+                - (
+                    display_collision.collision_energy_loss
+                    if display_collision is not None and display_phase == "after"
+                    else 0.0
+                ) - display_friction_energy,
+            }
+        else:
+            display_account = self.energy_breakdown()
 
-        zoom = self.camera_zoom if self.phase == "impact_explain" else 1.0
+        zoom = self.camera_zoom if explainer is not None else 1.0
         if zoom > 1.0 and self.camera_focus is not None:
             focus_x, focus_y = self.camera_focus
             focus_screen = (pivot[0], 315)
@@ -634,12 +830,16 @@ class BallHitsRod(BaseModel):
         scene_pivot = w2s(0.0, 0.0)
 
         screen.blit(STATIC_BG, (0, 0))
-        self.draw_header({
+        display_state = {
             "ready": "待开始",
-            "swinging": "杆摆下并准备碰撞" if not self.collided else "碰撞后物理摆",
+            "swinging": "碰撞前回放" if replay_active else (
+                "杆摆下并准备碰撞" if not self.collided else "碰撞后物理摆"
+            ),
             "impact_explain": "碰撞讲解（物理冻结）",
             "after": "碰撞后物理摆",
-        }.get(self.phase, self.phase))
+        }.get(display_phase, display_phase)
+        self.draw_header(display_state,
+                         display_time=replay_frame.time if replay_active else None)
         self.app.draw_mode_tabs()
 
         platform_y = h + rb
@@ -667,15 +867,15 @@ class BallHitsRod(BaseModel):
         draw_text(screen, "竖直碰撞位置", (scene_pivot[0] + 12, ref_y - 20), FONT_SMALL, MUTED)
 
         # 摆角弧线以转轴为圆心，显示竖直向下方向与细杆之间的夹角。
-        if not self.collided and 0.0 <= self.theta <= math.pi / 2.0:
+        if not display_collided and 0.0 <= display_theta <= math.pi / 2.0:
             arc_radius = 66
             arc_rect = pygame.Rect(
                              scene_pivot[0] - arc_radius, scene_pivot[1] - arc_radius,
                 2 * arc_radius, 2 * arc_radius,
             )
             pygame.draw.arc(screen, ACCENT_2, arc_rect,
-                            math.pi + self.theta, 1.5 * math.pi, 2)
-            bisector = 1.25 * math.pi + 0.5 * self.theta
+                            math.pi + display_theta, 1.5 * math.pi, 2)
+            bisector = 1.25 * math.pi + 0.5 * display_theta
             label_radius = arc_radius + 18
             label_pos = (
                 scene_pivot[0] + int(label_radius * math.cos(bisector)),
@@ -683,21 +883,40 @@ class BallHitsRod(BaseModel):
             )
             draw_text(
                 screen,
-                f"ψ={format_sig3(math.degrees(math.pi / 2 - self.theta))}°",
+                f"ψ={format_sig3(math.degrees(math.pi / 2 - display_theta))}°",
                 label_pos, FONT_SMALL, ACCENT_2, anchor="center",
             )
 
+        if replay_active:
+            replay_history = [
+                frame for frame in self.replay.frames
+                if frame.time <= replay_frame.time + 1e-10
+            ]
+            display_rod_trail = [frame.theta for frame in replay_history]
+            display_ball_trail = [
+                (frame.ball_x, h) for frame in replay_history
+            ]
+            if (not display_rod_trail
+                    or abs(display_rod_trail[-1] - display_theta) > 1e-10):
+                display_rod_trail.append(display_theta)
+            if (not display_ball_trail
+                    or abs(display_ball_trail[-1][0] - display_ball_x) > 1e-10):
+                display_ball_trail.append((display_ball_x, h))
+        else:
+            display_rod_trail = self.rod_trail
+            display_ball_trail = self.ball_trail
+
         rod_w = max(5, int(0.028 * scale))
-        if self.rod_trail:
+        if display_rod_trail:
             trail_surf_1.fill((0, 0, 0, 0))
-            for i, theta in enumerate(self.rod_trail):
-                p = i / max(1, len(self.rod_trail) - 1)
+            for i, theta in enumerate(display_rod_trail):
+                p = i / max(1, len(display_rod_trail) - 1)
                 end = w2s(-L * math.cos(theta), L * math.sin(theta))
                 pygame.draw.line(trail_surf_1, (*ROD_GLOW, int(10 + 45 * p)), scene_pivot, end,
                                  max(2, int(rod_w * (0.35 + 0.65 * p))))
             screen.blit(trail_surf_1, (0, 0))
 
-        end = w2s(-L * math.cos(self.theta), L * math.sin(self.theta))
+        end = w2s(-L * math.cos(display_theta), L * math.sin(display_theta))
         glow_surf.fill((0, 0, 0, 0))
         pygame.draw.line(glow_surf, (*ROD_GLOW, 35), scene_pivot, end, rod_w + 12)
         pygame.draw.line(glow_surf, (*ROD_GLOW, 60), scene_pivot, end, rod_w + 5)
@@ -723,7 +942,7 @@ class BallHitsRod(BaseModel):
         draw_text(screen, f"w = {format_sig3(display_omega)} rad/s", w_rect.center,
                   FONT_SMALL, ACCENT_3, anchor="center")
 
-        cpx, cpy = w2s(-h * math.cos(self.theta), h * math.sin(self.theta))
+        cpx, cpy = w2s(-h * math.cos(display_theta), h * math.sin(display_theta))
         pygame.draw.circle(screen, ACCENT_2, (cpx, cpy), 9, 2)
         pygame.draw.circle(screen, (255, 255, 255), (cpx, cpy), 4)
 
@@ -764,20 +983,21 @@ class BallHitsRod(BaseModel):
                 screen.blit(flash_surf, (0, 0))
 
         # 重力方向示意箭头。
-        gx, gy = w2s(-0.5 * L * math.cos(self.theta), 0.5 * L * math.sin(self.theta))
+        gx, gy = w2s(-0.5 * L * math.cos(display_theta),
+                     0.5 * L * math.sin(display_theta))
         draw_arrow(screen, (gx, gy), (gx, gy + int(0.20 * scale)), ACCENT_3, 2)
 
-        if self.ball_trail:
+        if display_ball_trail:
             trail_surf_2.fill((0, 0, 0, 0))
-            for i, (bx, by) in enumerate(self.ball_trail):
-                p = i / max(1, len(self.ball_trail) - 1)
+            for i, (bx, by) in enumerate(display_ball_trail):
+                p = i / max(1, len(display_ball_trail) - 1)
                 pos = w2s(bx, by)
                 if -100 <= pos[0] <= WIDTH + 100:
                     r = max(2, int(rb * scale * (0.22 + 0.40 * p)))
                     pygame.draw.circle(trail_surf_2, (*BALL1_GLOW, int(12 + 75 * p)), pos, r + 3)
             screen.blit(trail_surf_2, (0, 0))
 
-        if self.particles or self.shockwaves:
+        if not replay_active and (self.particles or self.shockwaves):
             particle_surf.fill((0, 0, 0, 0))
             for particle in self.particles:
                 particle.draw(particle_surf, w2s, streak_scale=scale * 0.08)
@@ -803,7 +1023,7 @@ class BallHitsRod(BaseModel):
                            (ball_pos[0] - br // 3 - 1, ball_pos[1] - br // 3 - 1),
                            max(2, br // 7))
 
-        if self.flash > 0:
+        if not replay_active and self.flash > 0:
             contact = w2s(0.0, h)
             flash_surf.fill((0, 0, 0, 0))
             f = self.flash
@@ -816,6 +1036,13 @@ class BallHitsRod(BaseModel):
                                contact, r0 + int(55 * f))
             screen.blit(flash_surf, (0, 0))
 
+        if replay_active and display_collision is not None:
+            highlight_alpha = 105 if replay_frame.event == "collision_before" else 145
+            highlight = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+            pygame.draw.circle(highlight, (*ACCENT_2, highlight_alpha),
+                               (cpx, cpy), 16, 2)
+            screen.blit(highlight, (0, 0))
+
         if abs(display_ball_v) > 0.01:
             arrow_len = clamp(abs(display_ball_v) * scale * 0.07, 35, 150)
             direction = 1 if display_ball_v > 0 else -1
@@ -825,21 +1052,22 @@ class BallHitsRod(BaseModel):
             draw_text(screen, f"v={format_sig3(display_ball_v)} m/s",
                       (finish[0] + (10 if direction > 0 else -10), ay - 12), FONT_SMALL,
                       GREEN, anchor="topleft" if direction > 0 else "topright")
-        elif not self.collided:
+        elif not display_collided:
             draw_text(screen, "小球静止等待碰撞", (245, 205), FONT_SMALL, ACCENT_3)
 
-        if self.notice:
+        if self.notice and not replay_active:
             notice_rect = pygame.Rect(38, 192, 730, 40)
             rounded_rect(screen, notice_rect, (62, 28, 38), 10, 1, (145, 65, 80))
             draw_text(screen, self.notice, notice_rect.center,
                       FONT_SMALL, (255, 185, 190), anchor="center")
 
-        if self.phase == "impact_explain" and self.impact_explainer is not None:
+        if not replay_active and self.phase == "impact_explain" and self.impact_explainer is not None:
             self.impact_explainer.draw(screen, pygame.Rect(38, 376, 730, 228))
 
-        if self.phase == "after":
+        if (not replay_active and self.phase == "after") or (
+                replay_active and display_phase == "after"):
             draw_energy_flow(screen, pygame.Rect(38, 244, 730, 126),
-                             self.energy_breakdown())
+                             display_account)
 
         if explainer:
             rod_L_now = explainer.rod_L_display()
@@ -849,6 +1077,10 @@ class BallHitsRod(BaseModel):
                 display_parts["rod"] + display_parts["ball"]
                 + self.collision_snapshot.potential
             )
+        elif replay_active:
+            ball_MRV_now = m * h * display_ball_v
+            rod_L_now = replay_frame.angular_momentum - ball_MRV_now
+            display_mechanical_energy = replay_frame.total_energy
         else:
             rod_L_now = I * self.omega
             ball_MRV_now = m * h * self.ball_v
@@ -858,16 +1090,17 @@ class BallHitsRod(BaseModel):
         current_lines = [
             f"重力加速度 g = {format_sig3(self.sliders['g'].value)} m/s^2",
             f"转动惯量 I = {format_sig3(I)} kg*m^2",
-            f"摆角 ψ = {format_sig3(math.degrees(math.pi / 2 - self.theta))}°",
+            f"摆角 ψ = {format_sig3(math.degrees(math.pi / 2 - display_theta))}°",
             f"杆角速度 w = {format_sig3(display_omega)} rad/s",
             f"碰撞点速率 h*w = {format_sig3(display_point_speed)} m/s",
             f"机械能 E = {format_sig3(display_mechanical_energy)} J",
-            f"阻尼耗散 Wb = {format_sig3(self.damping_energy)} J",
+            f"摩擦耗散 Wf = {format_sig3(display_friction_energy)} J",
             f"总角动量 = {format_sig3(total_L_now)} kg*m^2/s",
         ]
         collision_lines = None
-        if self.last_result:
-            r = self.last_result
+        result = display_collision if replay_active else self.last_result
+        if result:
+            r = result
             collision_lines = [
                 f"目标碰撞点速率 = {format_sig3(self.target_collision_speed())} m/s",
                 f"碰撞时刻 t = {format_sig3(r['impact_time'])} s",
@@ -889,7 +1122,7 @@ class BallHitsRod(BaseModel):
                 "小球静止于杆的碰撞高度，vc 是杆碰撞点线速度",
                 "ψ 从竖直向下方向量起，0°--90° 可由重力释放",
                 "超出范围时自动使用 90° 摆角和初始角速度",
-                "势能零点在杆竖直向下；阻尼力矩 tau_b=-b*w（b 单位 N*m*s）",
+                "势能零点在杆竖直向下；恒定摩擦矩 tau_f=-tau0*sign(w)",
             ],
             ("目标碰撞点速率", "恢复系数", "碰后总角动量", "角动量误差", "能量误差")
         )

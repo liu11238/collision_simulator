@@ -6,7 +6,8 @@ from dataclasses import dataclass, field
 
 import pygame
 
-from config import ACCENT, INPUT_ACTIVE, INPUT_BG, INPUT_BORDER, MUTED, RED, SELECT_BG, TEXT
+from config import (ACCENT, ACCENT_2, ACCENT_3, INPUT_ACTIVE, INPUT_BG,
+                    INPUT_BORDER, MUTED, RED, SELECT_BG, TEXT)
 from core.fonts import FONT_SMALL, FONT_TINY
 from render.primitives import draw_text, rounded_rect
 from utils import clamp, format_num, format_sig3
@@ -87,6 +88,65 @@ class Slider:
             value_text = f"{format_sig3(self.value)}{self.unit}"
         draw_text(surface, value_text, (self.x + self.w, self.y - 30),
                   FONT_SMALL, TEXT, anchor="topright")
+
+
+class TimelineSlider:
+    """回放专用时间轴，支持点击、拖拽和碰撞标记。"""
+
+    def __init__(self, x, y, w, duration=0.0):
+        self.rect = pygame.Rect(x, y, w, 28)
+        self.duration = max(0.0, float(duration))
+        self.value = 0.0
+        self.dragging = False
+
+    def set_duration(self, duration):
+        self.duration = max(0.0, float(duration))
+        self.value = clamp(self.value, 0.0, self.duration)
+
+    def _x_for_value(self, value=None):
+        value = self.value if value is None else value
+        ratio = value / max(1e-12, self.duration)
+        return int(self.rect.x + clamp(ratio, 0.0, 1.0) * self.rect.w)
+
+    def _value_from_x(self, x):
+        ratio = clamp((x - self.rect.x) / max(1, self.rect.w), 0.0, 1.0)
+        return ratio * self.duration
+
+    def set_value(self, value):
+        self.value = clamp(float(value), 0.0, self.duration)
+
+    def handle_event(self, event):
+        changed = False
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.rect.inflate(0, 14).collidepoint(event.pos):
+                self.dragging = True
+                self.value = self._value_from_x(event.pos[0])
+                changed = True
+        elif event.type == pygame.MOUSEMOTION and self.dragging:
+            self.value = self._value_from_x(event.pos[0])
+            changed = True
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.dragging = False
+        return changed
+
+    def draw(self, surface, collision_times=()):
+        pygame.draw.line(surface, (38, 52, 86),
+                         (self.rect.x, self.rect.centery),
+                         (self.rect.right, self.rect.centery), 8)
+        pygame.draw.line(surface, (72, 95, 145),
+                         (self.rect.x, self.rect.centery),
+                         (self.rect.right, self.rect.centery), 3)
+        for time in collision_times:
+            x = self._x_for_value(time)
+            pygame.draw.line(surface, ACCENT_2,
+                             (x, self.rect.y + 1),
+                             (x, self.rect.bottom - 1), 2)
+            pygame.draw.circle(surface, ACCENT_2, (x, self.rect.centery), 5)
+        knob_x = self._x_for_value()
+        pygame.draw.circle(surface, (10, 17, 33), (knob_x + 2, self.rect.centery + 2), 10)
+        pygame.draw.circle(surface, ACCENT_3, (knob_x, self.rect.centery), 8)
+        draw_text(surface, f"{self.value:0.2f}s", (self.rect.right, self.rect.y - 3),
+                  FONT_TINY, TEXT, anchor="topright")
 
 
 

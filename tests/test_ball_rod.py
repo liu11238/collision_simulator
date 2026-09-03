@@ -73,10 +73,25 @@ class BallRodTest(unittest.TestCase):
         self.assertGreater(model.gravity_potential(0.0), 0.0)
         self.assertAlmostEqual(model.percussion_center(), 2.0 * 1.2 / 3.0, places=12)
 
-    def test_damping_torque_has_viscous_sign_and_units(self):
+    def test_friction_torque_is_constant_and_opposes_rotation(self):
+        model = self.make_model(tau0=0.04)
+        self.assertAlmostEqual(model.friction_torque(2.5), -0.04, places=12)
+        self.assertAlmostEqual(model.friction_torque(0.25), -0.04, places=12)
+        self.assertAlmostEqual(model.friction_torque(-2.5), 0.04, places=12)
+        self.assertAlmostEqual(model.friction_torque(0.0), 0.0, places=12)
+
+    def test_legacy_b_parameter_maps_to_constant_friction(self):
         model = self.make_model(b=0.04)
-        self.assertAlmostEqual(model.damping_torque(2.5), -0.1, places=12)
-        self.assertAlmostEqual(model.damping_torque(-2.5), 0.1, places=12)
+        self.assertAlmostEqual(model.friction_moment(), 0.04, places=12)
+        self.assertAlmostEqual(model.damping_torque(2.5), -0.04, places=12)
+
+    def test_static_friction_only_locks_when_gravity_torque_is_small(self):
+        model = self.make_model(tau0=0.04, g=0.0)
+        self.assertTrue(model._can_stick(math.pi / 2.0, 1.0e-4))
+
+        model.set_control_value("g", 9.8)
+        model.set_control_value("tau0", 0.04)
+        self.assertFalse(model._can_stick(0.0, 1.0e-4))
 
     def test_percussion_center_has_zero_pivot_impulse(self):
         model = self.make_model(vc=3.0, h=2.0 / 3.0)
@@ -162,6 +177,27 @@ class BallRodTest(unittest.TestCase):
         model.jump_to_collision()
         self.assertTrue(model.collided)
         self.assertAlmostEqual(model.last_result["contact_before"], 0.0, places=12)
+
+    def test_replay_seek_is_read_only_and_playback_ends_cleanly(self):
+        model = self.make_model(vc=3.0, h=0.72, e=0.6)
+        model.jump_to_collision()
+        model.step(0.20)
+        self.assertGreater(model.replay.duration, 0.0)
+        physical_state = (model.theta, model.omega, model.ball_x,
+                          model.ball_v, model.t)
+        frames = tuple(model.replay.frames)
+
+        model.seek_replay(model.replay.duration * 0.5)
+        self.assertEqual((model.theta, model.omega, model.ball_x,
+                          model.ball_v, model.t), physical_state)
+        self.assertEqual(tuple(model.replay.frames), frames)
+
+        model.replay.playing = True
+        model.replay_playback_step(model.replay.duration + 1.0)
+        self.assertFalse(model.replay.playing)
+        self.assertAlmostEqual(model.replay.cursor, model.replay.duration)
+        self.assertEqual(model.replay_frame().event, "collision_after" if
+                         model.replay.duration == 0.0 else None)
 
 
 if __name__ == "__main__":

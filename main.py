@@ -75,6 +75,9 @@ class App:
 
                 model = self.model
 
+                if model.handle_timeline(event):
+                    continue
+
                 input_was_active, input_consumed, input_changed = model.handle_input_event(event)
                 if input_changed:
                     need_reset = True
@@ -94,6 +97,15 @@ class App:
                         model.reset()
                     elif event.key == pygame.K_c:
                         model.jump_to_collision()
+                    elif event.key == pygame.K_p and hasattr(model, "leave_replay"):
+                        model.leave_replay()
+                    elif event.key in (pygame.K_LEFT, pygame.K_RIGHT) and getattr(
+                            model, "replay_mode", False):
+                        direction = -1.0 if event.key == pygame.K_LEFT else 1.0
+                        model.seek_replay(
+                            model.replay.cursor + direction * model.replay.sample_interval,
+                            side="after",
+                        )
 
                 if input_consumed or input_was_active:
                     continue
