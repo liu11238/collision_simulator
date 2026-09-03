@@ -26,6 +26,17 @@ class Slider:
     decimals: int = 2
     dragging: bool = False
 
+    def __post_init__(self):
+        self._static_track = pygame.Surface((self.w + 1, 16), pygame.SRCALPHA)
+        pygame.draw.line(self._static_track, (40, 50, 80),
+                         (0, 10), (self.w, 10), 8)
+        pygame.draw.line(self._static_track, (55, 68, 105),
+                         (0, 8), (self.w, 8), 6)
+        for i in range(6):
+            tx = i * self.w / 5
+            pygame.draw.line(self._static_track, (80, 95, 135),
+                             (tx, 2), (tx, 14), 1)
+
     def knob_x(self):
         t = (self.value - self.vmin) / max(1e-12, self.vmax - self.vmin)
         return int(self.x + clamp(t, 0.0, 1.0) * self.w)
@@ -59,19 +70,12 @@ class Slider:
         return changed
 
     def draw(self, surface, value_text=None):
-        pygame.draw.line(surface, (40, 50, 80),
-                         (self.x, self.y + 2), (self.x + self.w, self.y + 2), 8)
-        pygame.draw.line(surface, (55, 68, 105),
-                         (self.x, self.y), (self.x + self.w, self.y), 6)
+        surface.blit(self._static_track, (self.x, self.y - 8))
         kx = self.knob_x()
         if kx > self.x:
             pygame.draw.line(surface, ACCENT,
                              (self.x, self.y), (kx, self.y), 6)
 
-        for i in range(6):
-            tx = self.x + i * self.w / 5
-            pygame.draw.line(surface, (80, 95, 135),
-                             (tx, self.y - 6), (tx, self.y + 6), 1)
         pygame.draw.circle(surface, (4, 8, 18), (kx + 2, self.y + 3), 14)
         pygame.draw.circle(surface, (50, 80, 130), (kx, self.y), 14)
         pygame.draw.circle(surface, ACCENT, (kx, self.y), 12)
@@ -280,7 +284,7 @@ class InputBox:
                              (sx, self.rect.y + 4,
                               max(1, sw), self.rect.h - 8),
                              border_radius=3)
-        surface.blit(FONT_SMALL.render(self.text, True, TEXT), (text_x, text_y))
+        draw_text(surface, self.text, (text_x, text_y), FONT_SMALL, TEXT)
 
         if self.active and self.show_cursor:
             cx = text_x + self.text_width(self.text[:self.cursor])

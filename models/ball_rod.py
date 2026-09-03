@@ -470,14 +470,15 @@ class BallHitsRod(BaseModel):
                 label_pos, FONT_SMALL, ACCENT_2, anchor="center",
             )
 
-        trail_surf_1.fill((0, 0, 0, 0))
         rod_w = max(5, int(0.028 * scale))
-        for i, theta in enumerate(self.rod_trail):
-            p = i / max(1, len(self.rod_trail) - 1)
-            end = w2s(-L * math.cos(theta), L * math.sin(theta))
-            pygame.draw.line(trail_surf_1, (*ROD_GLOW, int(10 + 45 * p)), pivot, end,
-                             max(2, int(rod_w * (0.35 + 0.65 * p))))
-        screen.blit(trail_surf_1, (0, 0))
+        if self.rod_trail:
+            trail_surf_1.fill((0, 0, 0, 0))
+            for i, theta in enumerate(self.rod_trail):
+                p = i / max(1, len(self.rod_trail) - 1)
+                end = w2s(-L * math.cos(theta), L * math.sin(theta))
+                pygame.draw.line(trail_surf_1, (*ROD_GLOW, int(10 + 45 * p)), pivot, end,
+                                 max(2, int(rod_w * (0.35 + 0.65 * p))))
+            screen.blit(trail_surf_1, (0, 0))
 
         end = w2s(-L * math.cos(self.theta), L * math.sin(self.theta))
         glow_surf.fill((0, 0, 0, 0))
@@ -513,21 +514,23 @@ class BallHitsRod(BaseModel):
         gx, gy = w2s(-0.5 * L * math.cos(self.theta), 0.5 * L * math.sin(self.theta))
         draw_arrow(screen, (gx, gy), (gx, gy + int(0.20 * scale)), ACCENT_3, 2)
 
-        trail_surf_2.fill((0, 0, 0, 0))
-        for i, (bx, by) in enumerate(self.ball_trail):
-            p = i / max(1, len(self.ball_trail) - 1)
-            pos = w2s(bx, by)
-            if -100 <= pos[0] <= WIDTH + 100:
-                r = max(2, int(rb * scale * (0.22 + 0.40 * p)))
-                pygame.draw.circle(trail_surf_2, (*BALL1_GLOW, int(12 + 75 * p)), pos, r + 3)
-        screen.blit(trail_surf_2, (0, 0))
+        if self.ball_trail:
+            trail_surf_2.fill((0, 0, 0, 0))
+            for i, (bx, by) in enumerate(self.ball_trail):
+                p = i / max(1, len(self.ball_trail) - 1)
+                pos = w2s(bx, by)
+                if -100 <= pos[0] <= WIDTH + 100:
+                    r = max(2, int(rb * scale * (0.22 + 0.40 * p)))
+                    pygame.draw.circle(trail_surf_2, (*BALL1_GLOW, int(12 + 75 * p)), pos, r + 3)
+            screen.blit(trail_surf_2, (0, 0))
 
-        particle_surf.fill((0, 0, 0, 0))
-        for particle in self.particles:
-            particle.draw(particle_surf, w2s, streak_scale=scale * 0.08)
-        for wave in self.shockwaves:
-            wave.draw(particle_surf, w2s, scale)
-        screen.blit(particle_surf, (0, 0))
+        if self.particles or self.shockwaves:
+            particle_surf.fill((0, 0, 0, 0))
+            for particle in self.particles:
+                particle.draw(particle_surf, w2s, streak_scale=scale * 0.08)
+            for wave in self.shockwaves:
+                wave.draw(particle_surf, w2s, scale)
+            screen.blit(particle_surf, (0, 0))
 
         ball_pos = w2s(self.ball_x, h)
         br = max(12, int(rb * scale))

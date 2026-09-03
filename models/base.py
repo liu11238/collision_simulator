@@ -31,6 +31,12 @@ class BaseModel:
         self.particles: list[Particle] = []
         self.shockwaves: list[ShockWave] = []
 
+        self._info_glass = pygame.Surface(
+            (438, SIM_H - 140), pygame.SRCALPHA
+        ).convert_alpha()
+        rounded_rect(self._info_glass, self._info_glass.get_rect(),
+                     (38, 52, 88, 55), 18)
+
         self.notice = ""
         self.sliders: dict[str, Slider] = {}
         self.input_boxes: dict[str, InputBox] = {}
@@ -212,9 +218,7 @@ class BaseModel:
                         highlight_keywords=()):
         info_rect = pygame.Rect(815, 118, 438, SIM_H - 140)
         rounded_rect(screen, info_rect, (10, 16, 32), 18)
-        glass = pygame.Surface((info_rect.w, info_rect.h), pygame.SRCALPHA).convert_alpha()
-        rounded_rect(glass, glass.get_rect(), (38, 52, 88, 55), 18)
-        screen.blit(glass, info_rect.topleft)
+        screen.blit(self._info_glass, info_rect.topleft)
 
         pygame.draw.rect(screen, (55, 72, 115), info_rect, width=1, border_radius=18)
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import random
+from collections import OrderedDict
 
 import pygame
 
@@ -11,8 +12,34 @@ from config import BG_BOTTOM, BG_MID, BG_TOP, SIM_H, TEXT, WIDTH
 from core.fonts import FONT
 from utils import clamp, lerp, lerp_color
 
+
+_CACHE_LIMIT = 2048
+_TEXT_CACHE = OrderedDict()
+_SPACED_TEXT_CACHE = OrderedDict()
+_GRADIENT_CACHE = OrderedDict()
+
+
+def _cache_put(cache, key, value):
+    cache[key] = value
+    cache.move_to_end(key)
+    if len(cache) > _CACHE_LIMIT:
+        cache.popitem(last=False)
+    return value
+
+
+def _cached_text_image(text, font, color):
+    key = (id(font), str(text), tuple(color))
+    image = _TEXT_CACHE.get(key)
+    if image is None:
+        image = font.render(str(text), True, color)
+        return _cache_put(_TEXT_CACHE, key, image)
+
+    _TEXT_CACHE.move_to_end(key)
+    return image
+
+
 def draw_text(surface, text, pos, font=FONT, color=TEXT, anchor="topleft"):
-    img = font.render(str(text), True, color)
+    img = _cached_text_image(text, font, color)
     rect = img.get_rect()
     setattr(rect, anchor, pos)
     surface.blit(img, rect)
@@ -30,24 +57,32 @@ def draw_spaced_text(surface, text, pos, font=FONT, color=TEXT,
 
         return rect
 
-    glyphs = [font.render(char, True, color) for char in text]
-    total_width = sum(glyph.get_width() for glyph in glyphs)
-    total_width += max(0, len(glyphs) - 1) * spacing
-    total_height = max(font.get_height(), *(glyph.get_height() for glyph in glyphs))
+    spacing_key = (id(font), text, tuple(color), spacing)
+    image = _SPACED_TEXT_CACHE.get(spacing_key)
+    if image is None:
+        glyphs = [_cached_text_image(char, font, color) for char in text]
+        total_width = sum(glyph.get_width() for glyph in glyphs)
+        total_width += max(0, len(glyphs) - 1) * spacing
+        total_height = max(font.get_height(), *(glyph.get_height() for glyph in glyphs))
 
+        image = pygame.Surface((total_width, total_height), pygame.SRCALPHA)
+        x = 0
+        for index, glyph in enumerate(glyphs):
+            y = (total_height - glyph.get_height()) // 2
+            image.blit(glyph, (x, y))
 
-    rect = pygame.Rect(0, 0, total_width, total_height)
+            x += glyph.get_width()
+            if index < len(glyphs) - 1:
+                x += spacing
+        _cache_put(_SPACED_TEXT_CACHE, spacing_key, image)
+    else:
+        _SPACED_TEXT_CACHE.move_to_end(spacing_key)
+
+    rect = image.get_rect()
     setattr(rect, anchor, pos)
-
-    x = rect.x
-    for index, glyph in enumerate(glyphs):
-        y = rect.y + (total_height - glyph.get_height()) // 2
-        surface.blit(glyph, (x, y))
-
-        x += glyph.get_width()
-        if index < len(glyphs) - 1:
-            x += spacing
+    surface.blit(image, rect)
     return rect
+
 
 def rounded_rect(surface, rect, color, radius=14, border=0, border_color=None):
     pygame.draw.rect(surface, color, rect, border_radius=radius)
@@ -70,9 +105,22 @@ def draw_gradient_3(surface, rect, c_top, c_mid, c_bot):
 
 def draw_horizontal_gradient_line(surface, x, y, w, c1, c2, height=1):
     width = max(0, int(w))
-    for i in range(width):
-        c = lerp_color(c1, c2, i / max(1, width - 1))
-        pygame.draw.line(surface, c, (x + i, y), (x + i, y + height - 1))
+    height = int(height)
+    if width <= 0 or height <= 0:
+        return
+
+    key = (width, height, tuple(c1), tuple(c2))
+    image = _GRADIENT_CACHE.get(key)
+    if image is None:
+        image = pygame.Surface((width, height))
+        for i in range(width):
+            c = lerp_color(c1, c2, i / max(1, width - 1))
+            pygame.draw.line(image, c, (i, 0), (i, height - 1))
+        _cache_put(_GRADIENT_CACHE, key, image)
+    else:
+        _GRADIENT_CACHE.move_to_end(key)
+
+    surface.blit(image, (int(x), int(y)))
 
 
 def draw_arrow(surface, start, end, color, width=3):
@@ -92,6 +140,7 @@ def draw_arrow(surface, start, end, color, width=3):
     )
 
     pygame.draw.polygon(surface, color, [end, left, right])
+
 
 def create_static_background():
     bg = pygame.Surface((WIDTH, SIM_H)).convert()
