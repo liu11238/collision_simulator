@@ -51,7 +51,8 @@ class BaseModel:
     def add_control(self, key, label, column, row, vmin, vmax, value, unit="", decimals=3):
         x = LEFT_X if column == 0 else RIGHT_X
         input_x = LEFT_INPUT_X if column == 0 else RIGHT_INPUT_X
-        y = BASE_Y + row * ROW
+        row_height = getattr(self, "control_row_height", ROW)
+        y = BASE_Y + row * row_height
 
         self.sliders[key] = Slider(label, x, y, SLIDER_W, vmin, vmax, value, unit, decimals)
         self.input_boxes[key] = InputBox(key, "精确输入", input_x, y - 8, INPUT_W, value, unit.strip())
@@ -201,8 +202,11 @@ class BaseModel:
                   f"状态：{state_text}    时间：{format_sig3(self.t)} s    FPS:{clock.get_fps():.0f}",
                   (38, 72), FONT, MUTED)
 
+        extra_hint = " | E 讲解开关 | Space 跳过讲解" if getattr(
+            self, "supports_impact_explanation", False
+        ) else ""
         draw_text(screen,
-                  "1/2 切换模型 | Space 开始/暂停 | R 重置 | C 直接到碰撞 | Esc 退出",
+                  "1/2 切换模型 | Space 开始/暂停 | R 重置 | C 直接到碰撞 | Esc 退出" + extra_hint,
                   (38, 96), FONT_SMALL, (160, 175, 210))
 
     def step_particles(self, real_dt, gravity=0.0):

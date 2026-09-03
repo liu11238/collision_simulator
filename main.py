@@ -88,6 +88,8 @@ class App:
                         self.switch_mode(1)
                     elif event.key == pygame.K_SPACE:
                         model.start_pause()
+                    elif event.key == pygame.K_e and hasattr(model, "toggle_explanation"):
+                        model.toggle_explanation()
                     elif event.key == pygame.K_r:
                         model.reset()
                     elif event.key == pygame.K_c:
