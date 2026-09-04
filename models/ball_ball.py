@@ -6,9 +6,11 @@ import math
 
 import pygame
 
-from config import (ACCENT_3, BALL1_COLOR, BALL1_EDGE, BALL1_GLOW, BALL2_COLOR,
-                    BALL2_EDGE, BALL2_GLOW,
-                    GREEN, MUTED, PLATFORM, PLATFORM_TOP, RED, SIM_H, WIDTH)
+from config import (ACCENT, ACCENT_2, ACCENT_3, BALL1_COLOR, BALL1_EDGE,
+                    BALL1_GLOW, BALL2_COLOR, BALL2_EDGE, BALL2_GLOW,
+                    BOTTOM_FORMULA_H, BOTTOM_FORMULA_Y, GREEN, MUTED, PLATFORM,
+                    PLATFORM_TOP,
+                    RED, SIM_H, WIDTH)
 from core.display import (STATIC_BG, flash_surf, glow_surf, particle_surf,
                           screen, trail_surf_1, trail_surf_2)
 from core.fonts import FONT_BIG, FONT_SMALL, FONT_TINY
@@ -174,7 +176,7 @@ class BallBallCollision(BaseModel):
         )
 
     def formula_rect(self):
-        return pygame.Rect(38, SIM_H + 218, 570, 52)
+        return pygame.Rect(38, BOTTOM_FORMULA_Y, 570, BOTTOM_FORMULA_H)
 
     def summary_line(self):
         return (f"m1={format_sig3(self.sliders['m1'].value)}  u1={format_sig3(self.sliders['u1'].value)}  "
@@ -188,7 +190,7 @@ class BallBallCollision(BaseModel):
         if self.phase == "ready":
             relation = "会相撞" if self.v1 > self.v2 else "不会相撞"
             delta_v = self.v1 - self.v2
-            rect = pygame.Rect(690, SIM_H + 218, 528, 52)
+            rect = pygame.Rect(690, BOTTOM_FORMULA_Y, 528, BOTTOM_FORMULA_H)
             rounded_rect(screen, rect, (18, 26, 46), 10, 1, (48, 64, 100))
             draw_text(screen, "碰撞判定", (rect.x + 12, rect.y + 7), FONT_SMALL, MUTED)
 

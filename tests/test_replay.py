@@ -20,7 +20,7 @@ class ReplayTimelineTest(unittest.TestCase):
         self.assertFalse(timeline.record_sample(frame(0.15, theta=15.0)))
         self.assertEqual([item.time for item in timeline.frames], [0.0, 0.11])
 
-    def test_collision_before_and_after_share_time_without_interpolation(self):
+    def test_collision_window_has_real_display_time_and_freezes_post_state(self):
         timeline = ReplayTimeline(sample_interval=0.1)
         timeline.record_initial(frame(0.0, theta=0.0, omega=1.0))
         timeline.record_sample(frame(0.2, theta=0.2, omega=2.0), force=True)
@@ -35,14 +35,19 @@ class ReplayTimelineTest(unittest.TestCase):
 
         self.assertEqual(timeline.collision_count, 1)
         before = timeline.frame_at(0.2, side="before")
-        after = timeline.frame_at(0.2, side="after")
+        after = timeline.frame_at(0.35, side="after")
         self.assertEqual(before.event, "collision_before")
         self.assertEqual(after.event, "collision_after")
         self.assertEqual(before.collision_id, after.collision_id)
-        self.assertEqual(timeline.frame_at(0.20000000001, side="after").event,
+        self.assertAlmostEqual(after.time, 0.35)
+        self.assertEqual(timeline.frame_at(0.275, side="after").event,
                          "collision_after")
+        self.assertAlmostEqual(timeline.collision_intensity_at(0.2), 1.0)
+        self.assertLess(timeline.collision_intensity_at(0.275), 1.0)
+        self.assertEqual(timeline.collision_window_at(0.1), None)
         self.assertEqual(timeline.frame_at(0.2, side="before").ball_v, 0.0)
-        self.assertEqual(timeline.frame_at(0.2, side="after").ball_v, 3.0)
+        self.assertEqual(timeline.frame_at(0.275, side="after").ball_v, 3.0)
+        self.assertEqual(timeline.frame_at(0.275, side="after").theta, 0.2)
 
     def test_normal_frames_interpolate_and_post_collision_stays_continuous(self):
         timeline = ReplayTimeline(sample_interval=0.1)
@@ -58,7 +63,11 @@ class ReplayTimelineTest(unittest.TestCase):
         )
         timeline.record_sample(frame(0.3, theta=0.8, omega=-0.5), force=True)
         post = timeline.frame_at(0.25)
-        self.assertAlmostEqual(post.omega, -0.75)
+        self.assertAlmostEqual(post.omega, -1.0)
+        self.assertEqual(post.event, "collision_after")
+
+        after_window = timeline.frame_at(0.4)
+        self.assertAlmostEqual(after_window.omega, -0.75)
 
     def test_seek_is_read_only_and_go_live_selects_after_frame(self):
         timeline = ReplayTimeline()

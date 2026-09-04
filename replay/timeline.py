@@ -1,8 +1,9 @@
 """固定采样的只读回放时间轴。
 
-时间轴保存的是展示快照，不拥有也不修改物理模型状态。碰撞事件使用同一
-时间戳的 ``collision_before`` / ``collision_after`` 两帧表示，查询时不会把
-这两帧跨越插值，从而避免讲解器出现球和杆的瞬移。
+时间轴保存的是展示快照，不拥有也不修改物理模型状态。碰撞事件占用一个
+真实的展示时间窗口：``collision_before`` 位于碰撞时刻，``collision_after``
+位于碰撞时刻之后的短暂慢动作窗口结束处。窗口中保持碰后状态，并只让
+确定性的碰撞视觉效果衰减；窗口结束后的物理样本整体向后平移。
 """
 
 from __future__ import annotations
@@ -10,6 +11,8 @@ from __future__ import annotations
 from bisect import bisect_right
 from dataclasses import dataclass, replace
 from math import isfinite
+
+from config import COLLISION_REPLAY_WINDOW
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,11 @@ class ReplayFrame:
     collision: object | None = None
     collision_id: int | None = None
     event: str | None = None
+    # Replay-only visual state.  These values are snapshots rather than live
+    # pygame objects, so seeking is deterministic and read-only.
+    impact_strength: float = 0.0
+    impact_flash: float = 0.0
+    impact_progress: float = 1.0
 
     @property
     def is_collision_boundary(self):
@@ -55,22 +63,31 @@ class ReplayFrame:
             collision=other.collision if p >= 0.5 else self.collision,
             collision_id=None,
             event=None,
+            impact_strength=lerp(self.impact_strength, other.impact_strength),
+            impact_flash=lerp(self.impact_flash, other.impact_flash),
+            impact_progress=lerp(self.impact_progress, other.impact_progress),
         )
 
 
 class ReplayTimeline:
     """固定采样、可 seek 的回放帧序列。"""
 
-    def __init__(self, sample_interval=1.0 / 60.0):
+    def __init__(self, sample_interval=1.0 / 60.0,
+                 collision_window=COLLISION_REPLAY_WINDOW):
         if sample_interval <= 0.0 or not isfinite(float(sample_interval)):
             raise ValueError("sample_interval 必须是正数")
+        if collision_window < 0.0 or not isfinite(float(collision_window)):
+            raise ValueError("collision_window 必须是非负有限数")
         self.sample_interval = float(sample_interval)
+        self.collision_window = float(collision_window)
         self.frames: list[ReplayFrame] = []
         self.cursor = 0.0
         self.playing = False
         self.live = True
         self._next_sample = 0.0
         self._collision_count = 0
+        self._display_time_shift = 0.0
+        self._collision_windows = []
 
     @property
     def duration(self):
@@ -84,6 +101,11 @@ class ReplayTimeline:
     def collision_count(self):
         return self._collision_count
 
+    @property
+    def collision_windows(self):
+        """只读的展示碰撞窗口序列 ``(start, end, collision_id)``。"""
+        return tuple(self._collision_windows)
+
     def clear(self):
         self.frames.clear()
         self.cursor = 0.0
@@ -91,6 +113,8 @@ class ReplayTimeline:
         self.live = True
         self._next_sample = 0.0
         self._collision_count = 0
+        self._display_time_shift = 0.0
+        self._collision_windows.clear()
 
     def _append(self, frame: ReplayFrame):
         if frame.time < 0.0 or not isfinite(float(frame.time)):
@@ -111,35 +135,76 @@ class ReplayTimeline:
         if not self.frames:
             self.record_initial(frame)
             return True
-        if not force and frame.time + 1e-12 < self._next_sample:
+        # ``frame.time`` is physics time.  Once an impact has been recorded,
+        # all later samples are shifted by the display-only slow-motion window.
+        display_time = frame.time + self._display_time_shift
+        if not force and display_time + 1e-12 < self._next_sample:
             return False
-        if force or frame.time + 1e-12 >= self._next_sample:
-            self._append(replace(frame, event=None, collision_id=None))
-            while self._next_sample <= frame.time + 1e-12:
+        if force or display_time + 1e-12 >= self._next_sample:
+            self._append(replace(frame, time=display_time, event=None,
+                                 collision_id=None))
+            while self._next_sample <= display_time + 1e-12:
                 self._next_sample += self.sample_interval
             return True
         return False
 
     def record_collision(self, before: ReplayFrame, after: ReplayFrame):
-        """在同一时刻写入碰撞前/碰撞后两帧。"""
+        """写入碰撞边界，并为其保留一个真实展示时间窗口。
+
+        ``before.time`` is the physics/display impact time.  ``after.time`` is
+        deliberately ignored as a timestamp: the post-impact snapshot is
+        placed at ``before.time + collision_window``.  The caller may continue
+        recording physics samples with their original physics timestamps; the
+        timeline applies the accumulated display shift automatically.
+        """
         if not self.frames:
             self.record_initial(before)
-        if before.time < self.frames[-1].time - 1e-12:
+        impact_time = before.time + self._display_time_shift
+        if impact_time < self.frames[-1].time - 1e-12:
             raise ValueError("碰撞帧不能早于当前时间轴")
         # force 采样可能已经写入了同一时刻的普通帧；碰撞边界应当只保留
-        # before/after 两帧，避免 exact seek 无法区分碰前和碰后。
-        while (self.frames and abs(self.frames[-1].time - before.time) <= 1e-10
+        # before 帧，避免 exact seek 无法区分碰前和窗口中的碰后状态。
+        while (self.frames and abs(self.frames[-1].time - impact_time) <= 1e-10
                and self.frames[-1].event is None):
             self.frames.pop()
         collision_id = self._collision_count
         self._collision_count += 1
-        self._append(replace(before, collision_id=collision_id,
+        after_time = impact_time + self.collision_window
+        self._append(replace(before, time=impact_time, collision_id=collision_id,
                              event="collision_before"))
-        self._append(replace(after, time=before.time, collision_id=collision_id,
+        self._append(replace(after, time=after_time, collision_id=collision_id,
                              event="collision_after"))
-        while self._next_sample <= before.time + 1e-12:
+        self._collision_windows.append((impact_time, after_time, collision_id))
+        self._display_time_shift += self.collision_window
+        while self._next_sample <= after_time + 1e-12:
             self._next_sample += self.sample_interval
         self.live = True
+
+    def collision_window_at(self, time=None):
+        """Return ``(start, end, collision_id, progress)`` for a display time.
+
+        ``progress`` is 0 at the impact boundary and 1 at the post-impact
+        boundary.  ``None`` means that the time is not inside a window.
+        """
+        if time is None:
+            time = self.cursor
+        time = float(time)
+        for start, end, collision_id in self._collision_windows:
+            if start - 1e-10 <= time <= end + 1e-10:
+                progress = ((time - start) / max(1e-12, end - start)
+                            if end > start else 1.0)
+                return start, end, collision_id, min(1.0, max(0.0, progress))
+        return None
+
+    def collision_intensity_at(self, time=None):
+        """Return a deterministic impact intensity in the current window."""
+        window = self.collision_window_at(time)
+        if window is None:
+            return 0.0
+        _, _, _, progress = window
+        # A quick flash at the boundary and a long, gentle decay through the
+        # slow-motion interval.  This is only a display value.
+        return max(0.0, 1.0 - progress) ** 1.7
 
     def _exact_index(self, time, side):
         indices = [i for i, frame in enumerate(self.frames)
@@ -155,7 +220,7 @@ class ReplayTimeline:
         return collision_indices[0] if collision_indices else indices[0]
 
     def frame_at(self, time=None, side="before"):
-        """取得展示帧；普通相邻帧线性插值，碰撞边界不插值。"""
+        """取得展示帧；普通帧插值，碰撞窗口内冻结为碰后状态。"""
         if not self.frames:
             return None
         if time is None:
@@ -166,6 +231,26 @@ class ReplayTimeline:
         if exact is not None:
             return self.frames[exact]
 
+        window = self.collision_window_at(time)
+        if window is not None:
+            _, end, collision_id, progress = window
+            after_index = next(
+                (i for i, item in enumerate(self.frames)
+                 if item.collision_id == collision_id
+                 and item.event == "collision_after"),
+                None,
+            )
+            if after_index is not None:
+                after = self.frames[after_index]
+                # The state is held after impact.  Visual fields still expose
+                # the deterministic decay to stateless renderers.
+                return replace(
+                    after,
+                    time=time,
+                    impact_progress=progress,
+                    impact_flash=max(0.0, 1.0 - progress) ** 1.7,
+                )
+
         times = [frame.time for frame in self.frames]
         right_index = bisect_right(times, time)
         if right_index <= 0:
@@ -174,9 +259,7 @@ class ReplayTimeline:
             return self.frames[-1]
         left = self.frames[right_index - 1]
         right = self.frames[right_index]
-        if (left.event == "collision_before"
-                and right.event == "collision_after") or abs(right.time - left.time) <= 1e-12:
-            # 查询落在碰撞边界附近时保持左侧/碰前状态，不制造跨事件插值。
+        if abs(right.time - left.time) <= 1e-12:
             return left
         progress = (time - left.time) / (right.time - left.time)
         return left.interpolated(right, progress)

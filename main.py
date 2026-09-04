@@ -6,7 +6,7 @@ import sys
 
 import pygame
 
-from config import FPS, SIM_H
+from config import (BOTTOM_ACTION_H, BOTTOM_ACTION_Y, FPS, SIM_H)
 from core.display import clock, screen
 from models.ball_ball import BallBallCollision
 from models.ball_rod import BallHitsRod
@@ -19,9 +19,17 @@ class App:
             model.app = self
         self.mode_index = 0
 
-        self.btn_start = Button("开始 / 暂停  Space", pygame.Rect(38, SIM_H + 286, 180, 38))
-        self.btn_reset = Button("重置  R", pygame.Rect(236, SIM_H + 286, 110, 38))
-        self.btn_snap = Button("直接到碰撞  C", pygame.Rect(364, SIM_H + 286, 150, 38))
+        self.btn_start = Button(
+            "开始 / 暂停  Space", pygame.Rect(38, BOTTOM_ACTION_Y, 180,
+                                               BOTTOM_ACTION_H)
+        )
+        self.btn_reset = Button(
+            "重置  R", pygame.Rect(236, BOTTOM_ACTION_Y, 110, BOTTOM_ACTION_H)
+        )
+        self.btn_snap = Button(
+            "直接到碰撞  C", pygame.Rect(364, BOTTOM_ACTION_Y, 150,
+                                           BOTTOM_ACTION_H)
+        )
         self.mode_buttons = [
             Button("1  两自由质点弹性碰撞仿真", pygame.Rect(38, 118, 280, 36)),
             Button("2  质点‑定轴细杆碰撞仿真", pygame.Rect(330, 118, 280, 36)),

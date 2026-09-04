@@ -48,6 +48,32 @@ SLIDER_W = 380
 INPUT_W, INPUT_GAP = 112, 18
 LEFT_INPUT_X = LEFT_X + SLIDER_W + INPUT_GAP
 RIGHT_INPUT_X = RIGHT_X + SLIDER_W + INPUT_GAP
-BASE_Y = SIM_H + 62
 
+# Bottom panel layout.  Keep every bottom-panel coordinate relative to SIM_H so
+# a window resize only requires changing the panel dimensions above.
+BOTTOM_PAD_X = 22
+BOTTOM_GAP_X = 44
+BOTTOM_LEFT_X = BOTTOM_PAD_X
+BOTTOM_RIGHT_X = 672
+BOTTOM_PANEL_TOP = 16
+BOTTOM_PANEL_H = 312
+BOTTOM_CONTROL_Y = SIM_H + 62
+BOTTOM_FORMULA_Y = SIM_H + 218
+BOTTOM_FORMULA_H = 52
+BOTTOM_ACTION_Y = SIM_H + 286
+BOTTOM_ACTION_H = 38
+BOTTOM_SUMMARY_Y = SIM_H + 294
+BOTTOM_TIMELINE_X = 38
+BOTTOM_TIMELINE_Y = SIM_H - 42
+BOTTOM_TIMELINE_W = 730
+BOTTOM_TIMELINE_LABEL_Y = SIM_H - 67
+BOTTOM_CARD_Y = SIM_H + 350
+BOTTOM_CARD_H = 54
+
+# Compatibility names used by the slider/control code.
+BASE_Y = BOTTOM_CONTROL_Y
 ROW = 50
+
+# Display-time collision replay semantics.  This is deliberately independent
+# from the physics integrator's clock.
+COLLISION_REPLAY_WINDOW = 0.15

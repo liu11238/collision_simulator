@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import pygame
 
-from config import (ACCENT, ACCENT_2, ACCENT_3, BASE_Y, INPUT_GAP, INPUT_W,
-                    LEFT_INPUT_X, LEFT_X,
-                    MUTED, PANEL, PANEL_2, RIGHT_INPUT_X, RIGHT_X, ROW, SIM_H,
-                    SLIDER_W, TEXT, TITLE_LETTER_SPACING, UI_H, WIDTH)
+from config import (ACCENT, ACCENT_2, ACCENT_3, BASE_Y, BOTTOM_ACTION_Y,
+                    BOTTOM_CARD_H, BOTTOM_CARD_Y, BOTTOM_FORMULA_H, BOTTOM_FORMULA_Y,
+                    BOTTOM_LEFT_X, BOTTOM_PANEL_H, BOTTOM_PANEL_TOP,
+                    BOTTOM_RIGHT_X, BOTTOM_SUMMARY_Y, BOTTOM_TIMELINE_LABEL_Y,
+                    BOTTOM_TIMELINE_W, BOTTOM_TIMELINE_X, BOTTOM_TIMELINE_Y,
+                    INPUT_GAP, INPUT_W, LEFT_INPUT_X, LEFT_X, MUTED, PANEL,
+                    PANEL_2, RIGHT_INPUT_X, RIGHT_X, ROW, SIM_H, SLIDER_W,
+                    TEXT, TITLE_LETTER_SPACING, UI_H, WIDTH)
 from core.display import clock, screen
 from core.fonts import FONT, FONT_BIG, FONT_SMALL, FONT_TINY, FONT_TITLE
 from effects.particles import Particle, ShockWave
@@ -41,7 +45,9 @@ class BaseModel:
         self.sliders: dict[str, Slider] = {}
         self.input_boxes: dict[str, InputBox] = {}
         self.build_controls()
-        self.timeline_slider = TimelineSlider(38, SIM_H - 42, 730)
+        self.timeline_slider = TimelineSlider(
+            BOTTOM_TIMELINE_X, BOTTOM_TIMELINE_Y, BOTTOM_TIMELINE_W
+        )
         self.reset()
 
         self.sync_inputs(force=True)
@@ -111,7 +117,7 @@ class BaseModel:
         return "", ""
 
     def formula_rect(self):
-        return pygame.Rect(690, SIM_H + 218, 528, 52)
+        return pygame.Rect(690, BOTTOM_FORMULA_Y, 528, BOTTOM_FORMULA_H)
 
     def summary_line(self):
         return ""
@@ -174,9 +180,13 @@ class BaseModel:
         pygame.draw.line(screen, (90, 110, 160), (0, ui_y + 1), (WIDTH, ui_y + 1), 1)
 
 
-        rounded_rect(screen, pygame.Rect(22, ui_y + 16, 604, 312),
+        rounded_rect(screen, pygame.Rect(BOTTOM_LEFT_X,
+                                         ui_y + BOTTOM_PANEL_TOP, 604,
+                                         BOTTOM_PANEL_H),
                      PANEL_2, 18, 1, (58, 72, 112))
-        rounded_rect(screen, pygame.Rect(672, ui_y + 16, 580, 312),
+        rounded_rect(screen, pygame.Rect(BOTTOM_RIGHT_X,
+                                         ui_y + BOTTOM_PANEL_TOP, 580,
+                                         BOTTOM_PANEL_H),
                      PANEL_2, 18, 1, (58, 72, 112))
 
         for key, slider in self.sliders.items():
@@ -197,7 +207,7 @@ class BaseModel:
 
         self.app.btn_reset.draw(screen)
         self.app.btn_snap.draw(screen)
-        draw_text(screen, self.summary_line(), (535, SIM_H + 294),
+        draw_text(screen, self.summary_line(), (535, BOTTOM_SUMMARY_Y),
                   FONT_SMALL, (165, 182, 218))
         self.draw_timeline()
         self.draw_summary_cards()
@@ -209,17 +219,24 @@ class BaseModel:
         self.timeline_slider.set_value(self.replay.cursor)
         collision_times = [frame.time for frame in self.replay.frames
                            if frame.event == "collision_before"]
-        draw_text(screen, "Replay 时间轴", (38, SIM_H - 67), FONT_SMALL, MUTED)
+        collision_windows = [
+            (start, end)
+            for start, end, _ in self.replay.collision_windows
+        ]
+        draw_text(screen, "Replay 时间轴", (BOTTOM_TIMELINE_X,
+                                             BOTTOM_TIMELINE_LABEL_Y),
+                  FONT_SMALL, MUTED)
         state = "回放中" if getattr(self, "replay_mode", False) else "实时"
-        draw_text(screen, state, (768, SIM_H - 67), FONT_SMALL, ACCENT_3,
+        draw_text(screen, state, (BOTTOM_TIMELINE_X + BOTTOM_TIMELINE_W,
+                                  BOTTOM_TIMELINE_LABEL_Y), FONT_SMALL, ACCENT_3,
                   anchor="topright")
-        self.timeline_slider.draw(screen, collision_times)
+        self.timeline_slider.draw(screen, collision_times, collision_windows)
 
     def draw_summary_cards(self):
         """在底部给出可快速读出的 Energy / Collision 双栏摘要。"""
-        y = SIM_H + 350
-        left = pygame.Rect(22, y, 604, 54)
-        right = pygame.Rect(672, y, 580, 54)
+        y = BOTTOM_CARD_Y
+        left = pygame.Rect(BOTTOM_LEFT_X, y, 604, BOTTOM_CARD_H)
+        right = pygame.Rect(BOTTOM_RIGHT_X, y, 580, BOTTOM_CARD_H)
         for rect in (left, right):
             rounded_rect(screen, rect, (18, 26, 46), 10, 1, (48, 64, 100))
 

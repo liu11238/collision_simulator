@@ -7,9 +7,10 @@ import math
 import pygame
 
 from config import (ACCENT, ACCENT_2, ACCENT_3, BALL1_COLOR, BALL1_EDGE,
-                    BALL1_GLOW, BASE_Y, GREEN, INPUT_W, MUTED,
-                    PLATFORM, PLATFORM_TOP, RIGHT_INPUT_X, ROD_COLOR, ROD_EDGE,
-                    ROD_GLOW, ROW, SIM_H, WIDTH)
+                    BALL1_GLOW, BASE_Y, BOTTOM_FORMULA_H, BOTTOM_FORMULA_Y,
+                    GREEN, INPUT_W, MUTED, PLATFORM, PLATFORM_TOP,
+                    RIGHT_INPUT_X, ROD_COLOR, ROD_EDGE, ROD_GLOW, ROW, SIM_H,
+                    WIDTH)
 from core.display import (STATIC_BG, flash_surf, glow_surf, particle_surf,
                           screen, trail_surf_1, trail_surf_2)
 from core.fonts import FONT_SMALL
@@ -20,6 +21,7 @@ from presentation.collision_explainer import CollisionExplainer
 from replay.timeline import ReplayFrame, ReplayTimeline
 from render.primitives import draw_arrow, draw_text, rounded_rect
 from render.energy_flow import draw_energy_flow
+from render.replay_fx import draw_impact_fx
 from ui.widgets import InputBox
 from utils import clamp, format_sig3
 
@@ -44,6 +46,7 @@ class BallHitsRod(BaseModel):
         self.replay = ReplayTimeline()
         self.replay_mode = False
         self.replay_side = "after"
+        self._fast_forwarding = False
         super().__init__()
 
     def build_controls(self):
@@ -106,7 +109,8 @@ class BallHitsRod(BaseModel):
 
     def _replay_frame(self, *, phase=None, theta=None, omega=None,
                       ball_x=None, ball_v=None, collision=None,
-                      event=None, collision_id=None):
+                      event=None, collision_id=None, impact_strength=0.0,
+                      impact_flash=0.0, impact_progress=1.0):
         """将当前或显式指定的展示状态复制为只读回放帧。"""
         theta = self.theta if theta is None else theta
         omega = self.omega if omega is None else omega
@@ -134,6 +138,9 @@ class BallHitsRod(BaseModel):
             collision=collision,
             collision_id=collision_id,
             event=event,
+            impact_strength=impact_strength,
+            impact_flash=impact_flash,
+            impact_progress=impact_progress,
         )
 
     def _record_replay_sample(self, force=False):
@@ -387,14 +394,30 @@ class BallHitsRod(BaseModel):
         self.running = not self.running
 
     def jump_to_collision(self):
-        """把杆直接置于碰撞瞬间，并立即结算（兼容 C/旧测试语义）。"""
-        self.theta = math.pi / 2.0
-        self.omega = self.target_omega
-        self.ball_x = 0.0
-        self.ball_v = 0.0
+        """通过真实物理子步快进到碰撞，而不是伪造碰撞时刻。
+
+        C 键仍然是一个便捷入口，但碰撞时刻 ``result.impact_time`` 和
+        Replay 的展示时长来自同一套实际积分。120 秒是防止异常参数或
+        数值状态导致无限循环的硬上限。
+        """
+        if self.phase == "impact_explain":
+            self.skip_explanation()
+        if self.collided:
+            self.running = True
+            return
         self.phase = "swinging"
-        self.begin_collision(explain=False)
         self.running = True
+        self._fast_forwarding = True
+        try:
+            guard_time = 0.0
+            while not self.collided and guard_time < 120.0:
+                self._advance_simulation_substep(self.MAX_SUBSTEP)
+                guard_time += self.MAX_SUBSTEP
+        finally:
+            self._fast_forwarding = False
+        if not self.collided:
+            self.running = False
+            self.notice = "C 键快进在 120 s 内未到达碰撞位置，请检查参数。"
 
     def do_collision(self):
         """兼容旧调用方：立即计算并提交碰撞结果。"""
@@ -410,11 +433,17 @@ class BallHitsRod(BaseModel):
             phase="swinging", theta=result.theta_before,
             omega=result.omega_before, ball_v=self.ball_v,
             collision=result,
+            impact_strength=abs(result.relative_before),
+            impact_flash=1.0,
+            impact_progress=0.0,
         )
         after_frame = self._replay_frame(
             phase="after", theta=math.pi / 2.0,
             omega=result.omega_after, ball_v=result.v_after,
             collision=result,
+            impact_strength=abs(result.relative_before),
+            impact_flash=0.0,
+            impact_progress=1.0,
         )
         self.replay.record_collision(before_frame, after_frame)
         if explain:
@@ -540,8 +569,7 @@ class BallHitsRod(BaseModel):
         self.camera_zoom = 1.0
         self.camera_focus = None
         if (not self.replay.frames
-                or self.t > self.replay.frames[-1].time + 1e-10
-                or self.replay.frames[-1].event is None):
+                or self.t > self.replay.frames[-1].time + 1e-10):
             self._record_replay_sample(force=True)
 
         if spawn_fx:
@@ -649,13 +677,13 @@ class BallHitsRod(BaseModel):
             if self.theta >= math.pi / 2.0 - self.EPS:
                 self.theta = math.pi / 2.0
                 self.omega = self.target_omega
-                self.begin_collision()
+                self.begin_collision(explain=False if self._fast_forwarding else None)
             else:
                 self._advance_swing(sub)
                 if self.theta >= math.pi / 2.0 - self.EPS:
                     self.theta = math.pi / 2.0
                     self.omega = self.target_omega
-                    self.begin_collision()
+                    self.begin_collision(explain=False if self._fast_forwarding else None)
         elif self.phase == "after":
             self.ball_x += self.ball_v * sub
             self._advance_after_collision(sub)
@@ -719,7 +747,7 @@ class BallHitsRod(BaseModel):
         )
 
     def formula_rect(self):
-        return pygame.Rect(690, SIM_H + 218, 528, 52)
+        return pygame.Rect(690, BOTTOM_FORMULA_Y, 528, BOTTOM_FORMULA_H)
 
     def summary_line(self):
         mode = "重力释放" if not self.uses_initial_speed else "90°+初始角速度"
@@ -1037,11 +1065,10 @@ class BallHitsRod(BaseModel):
             screen.blit(flash_surf, (0, 0))
 
         if replay_active and display_collision is not None:
-            highlight_alpha = 105 if replay_frame.event == "collision_before" else 145
-            highlight = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-            pygame.draw.circle(highlight, (*ACCENT_2, highlight_alpha),
-                               (cpx, cpy), 16, 2)
-            screen.blit(highlight, (0, 0))
+            draw_impact_fx(
+                screen, (cpx, cpy), replay_frame.impact_flash,
+                replay_frame.impact_strength,
+            )
 
         if abs(display_ball_v) > 0.01:
             arrow_len = clamp(abs(display_ball_v) * scale * 0.07, 35, 150)
