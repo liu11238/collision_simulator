@@ -1,4 +1,4 @@
-"""两自由质点一维弹性碰撞的物理模型和场景绘制。"""
+"""双球一维碰撞的物理模型和场景绘制。"""
 
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ from render.primitives import draw_arrow, draw_text, rounded_rect
 from utils import clamp, format_sig3, lerp_color
 
 class BallBallCollision(BaseModel):
-    name = "两自由质点弹性碰撞仿真"
-    short_name = "两自由质点"
+    name = "双球一维碰撞仿真"
+    short_name = "双球模型"
     BALL_RADIUS_WORLD = 0.34
     MAX_SUBSTEP = 0.0025
 
@@ -352,7 +352,7 @@ class BallBallCollision(BaseModel):
             f"质心速度 Vcm = {format_sig3(p_now / (m1 + m2))} m/s",
             f"左球动能 = {format_sig3(ke1)} J",
             f"右球动能 = {format_sig3(ke2)} J",
-            f"总动量 = {format_sig3(p_now)} kg*m/s",
+            f"两球系统总线动量 = {format_sig3(p_now)} kg*m/s",
         ]
 
         collision_lines = None

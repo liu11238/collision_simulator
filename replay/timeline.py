@@ -27,7 +27,14 @@ class ReplayFrame:
     ball_v: float = 0.0
     mechanical_energy: float = 0.0
     total_energy: float = 0.0
+    rod_kinetic_energy: float = 0.0
+    ball_kinetic_energy: float = 0.0
+    potential_energy: float = 0.0
+    collision_energy_loss: float = 0.0
     friction_energy: float = 0.0
+    energy_residual: float = 0.0
+    rod_angular_momentum: float = 0.0
+    ball_angular_momentum: float = 0.0
     angular_momentum: float = 0.0
     collision: object | None = None
     collision_id: int | None = None
@@ -41,6 +48,40 @@ class ReplayFrame:
     @property
     def is_collision_boundary(self):
         return self.event in {"collision_before", "collision_after"}
+
+    # Short aliases make exported replay data convenient to inspect while the
+    # canonical fields above remain explicit and self-documenting.
+    @property
+    def rod_ke(self):
+        return self.rod_kinetic_energy
+
+    @property
+    def ball_ke(self):
+        return self.ball_kinetic_energy
+
+    @property
+    def potential(self):
+        return self.potential_energy
+
+    @property
+    def collision_loss(self):
+        return self.collision_energy_loss
+
+    @property
+    def friction_heat(self):
+        return self.friction_energy
+
+    @property
+    def rod_L(self):
+        return self.rod_angular_momentum
+
+    @property
+    def ball_L(self):
+        return self.ball_angular_momentum
+
+    @property
+    def total_L(self):
+        return self.angular_momentum
 
     def interpolated(self, other: "ReplayFrame", progress: float) -> "ReplayFrame":
         """在两个普通连续帧之间插值，不跨越碰撞边界。"""
@@ -58,7 +99,14 @@ class ReplayFrame:
             ball_v=lerp(self.ball_v, other.ball_v),
             mechanical_energy=lerp(self.mechanical_energy, other.mechanical_energy),
             total_energy=lerp(self.total_energy, other.total_energy),
+            rod_kinetic_energy=lerp(self.rod_kinetic_energy, other.rod_kinetic_energy),
+            ball_kinetic_energy=lerp(self.ball_kinetic_energy, other.ball_kinetic_energy),
+            potential_energy=lerp(self.potential_energy, other.potential_energy),
+            collision_energy_loss=lerp(self.collision_energy_loss, other.collision_energy_loss),
             friction_energy=lerp(self.friction_energy, other.friction_energy),
+            energy_residual=lerp(self.energy_residual, other.energy_residual),
+            rod_angular_momentum=lerp(self.rod_angular_momentum, other.rod_angular_momentum),
+            ball_angular_momentum=lerp(self.ball_angular_momentum, other.ball_angular_momentum),
             angular_momentum=lerp(self.angular_momentum, other.angular_momentum),
             collision=other.collision if p >= 0.5 else self.collision,
             collision_id=None,

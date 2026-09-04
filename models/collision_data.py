@@ -10,6 +10,37 @@ from dataclasses import dataclass, fields
 
 
 @dataclass(frozen=True)
+class ConservationState:
+    """碰撞一侧的守恒量状态。
+
+    球—杆系统的碰撞约束是绕转轴的角动量，而不是整个系统的线动量。
+    线动量字段仍保留为诊断量，用来明确显示转轴外冲量的来源。
+    """
+
+    angular_momentum: float
+    mechanical_energy: float
+    rod_angular_momentum: float = 0.0
+    ball_angular_momentum: float = 0.0
+    ball_linear_momentum: float = 0.0
+    system_linear_momentum: float = 0.0
+    rod_kinetic_energy: float = 0.0
+    ball_kinetic_energy: float = 0.0
+    potential_energy: float = 0.0
+
+    @property
+    def total_angular_momentum(self):
+        return self.angular_momentum
+
+    @property
+    def energy(self):
+        return self.mechanical_energy
+
+
+def _relative_error(before, after, floor=1e-12):
+    return abs(after - before) / max(abs(before), abs(after), floor)
+
+
+@dataclass(frozen=True)
 class CollisionSnapshot:
     """质点-定轴细杆碰撞在瞬间的计算结果。"""
 
@@ -59,6 +90,9 @@ class CollisionSnapshot:
 
     impact_time: float
 
+    conservation_before: ConservationState | None = None
+    conservation_after: ConservationState | None = None
+
     # New descriptive aliases used by presentation code and exported data.
     @property
     def ball_v_before(self):
@@ -71,6 +105,47 @@ class CollisionSnapshot:
     @property
     def collision_impulse(self):
         return self.impulse
+
+    def conservation_report(self):
+        """返回区分物理耗散与数值误差的守恒报告。"""
+        before = self.conservation_before
+        after = self.conservation_after
+        if before is None or after is None:
+            return {
+                "angular_momentum_before": self.total_L_before,
+                "angular_momentum_after": self.total_L_after,
+                "angular_momentum_error": self.total_L_after - self.total_L_before,
+                "angular_momentum_relative_error": _relative_error(
+                    self.total_L_before, self.total_L_after
+                ),
+                "energy_before": self.energy_before,
+                "energy_after": self.energy_after,
+                "energy_change": self.energy_after - self.energy_before,
+                "energy_dissipation": self.collision_energy_loss,
+                "energy_residual": (
+                    self.energy_after - self.energy_before
+                    + self.collision_energy_loss
+                ),
+            }
+
+        angular_error = after.angular_momentum - before.angular_momentum
+        energy_change = after.mechanical_energy - before.mechanical_energy
+        return {
+            "angular_momentum_before": before.angular_momentum,
+            "angular_momentum_after": after.angular_momentum,
+            "angular_momentum_error": angular_error,
+            "angular_momentum_relative_error": _relative_error(
+                before.angular_momentum, after.angular_momentum
+            ),
+            "energy_before": before.mechanical_energy,
+            "energy_after": after.mechanical_energy,
+            "energy_change": energy_change,
+            "energy_dissipation": self.collision_energy_loss,
+            "energy_residual": energy_change + self.collision_energy_loss,
+            "line_momentum_before": before.system_linear_momentum,
+            "line_momentum_after": after.system_linear_momentum,
+            "pivot_impulse": self.pivot_impulse,
+        }
 
     def __getitem__(self, key):
         """兼容原先 ``last_result["..."]`` 的字典式访问。"""

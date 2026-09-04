@@ -243,7 +243,7 @@ class CollisionExplainer:
         bar_w = rect.w - 220
         x = rect.x + 185
 
-        draw_text(surface, "角动量从杆传给小球；总量不凭空改变",
+        draw_text(surface, "绕转轴角动量在杆与小球之间重新分配；总量不凭空改变",
                   (rect.x + 20, rect.y + 57), FONT_SMALL, MUTED)
         draw_text(surface, "总角动量守恒  L杆 + L球",
                   (rect.x + 20, rect.y + 78), FONT_TINY, TEXT)
@@ -372,7 +372,7 @@ class CollisionExplainer:
         draw_text(surface, "碰撞过程重演", (rect.x + 18, rect.y + 12), FONT_BIG, TEXT)
         draw_text(surface, "Space 跳过本次讲解", (rect.right - 18, rect.y + 18),
                   FONT_SMALL, ACCENT_2, anchor="topright")
-        labels = ("① 速度交换", "② 动量转移", "③ 能量分流")
+        labels = ("① 速度交换", "② 角动量分配", "③ 能量分流")
         for index, label in enumerate(labels):
             color = ACCENT_3 if index == self.phase_index else MUTED
             draw_text(surface, label, (rect.x + 190 + index * 125, rect.y + 20),

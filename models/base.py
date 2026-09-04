@@ -17,6 +17,7 @@ from core.fonts import FONT, FONT_BIG, FONT_SMALL, FONT_TINY, FONT_TITLE
 from effects.particles import Particle, ShockWave
 from render.primitives import (draw_horizontal_gradient_line, draw_spaced_text,
                                draw_text, rounded_rect)
+from render.energy import EnergyState
 from ui.widgets import InputBox, Slider, TimelineSlider
 from utils import format_sig3, safe_float
 
@@ -246,31 +247,22 @@ class BaseModel:
                 self, "replay_mode", False
             ) and hasattr(self, "replay_frame") else None
             if replay_frame is not None:
-                collision = (
-                    self.replay_collision_snapshot(replay_frame)
-                    if hasattr(self, "replay_collision_snapshot")
-                    else replay_frame.collision
+                account = EnergyState(
+                    initial=self.initial_energy,
+                    mechanical=replay_frame.total_energy,
+                    rod_kinetic=replay_frame.rod_kinetic_energy,
+                    ball_kinetic=replay_frame.ball_kinetic_energy,
+                    potential=replay_frame.potential_energy,
+                    collision_loss=replay_frame.collision_energy_loss,
+                    friction_heat=replay_frame.friction_energy,
+                    residual=replay_frame.energy_residual,
                 )
-                committed = collision is not None and replay_frame.phase == "after"
-                collision_loss = (
-                    collision.collision_energy_loss if committed else 0.0
-                )
-                damping = replay_frame.friction_energy if committed else 0.0
-                initial = self.initial_energy
-                account = {
-                    "initial": initial,
-                    "mechanical": replay_frame.total_energy,
-                    "collision": collision_loss,
-                    "damping": damping,
-                    "residual": initial - replay_frame.total_energy
-                    - collision_loss - damping,
-                }
             draw_text(screen, "Energy", (left.x + 12, left.y + 8), FONT_SMALL,
                       ACCENT_3)
             draw_text(screen,
                       f"机械能 {format_sig3(account.get('mechanical', 0.0))} J  "
                       f"碰撞损失 {format_sig3(account.get('collision', 0.0))} J  "
-                      f"摩擦 {format_sig3(account.get('damping', 0.0))} J",
+                      f"摩擦热 {format_sig3(account.get('friction_heat', 0.0))} J",
                       (left.x + 98, left.y + 10), FONT_TINY, TEXT)
             draw_text(screen, f"账本误差 {format_sig3(account.get('residual', 0.0))} J",
                       (left.x + 12, left.y + 32), FONT_TINY, MUTED)

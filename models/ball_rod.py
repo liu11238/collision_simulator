@@ -16,12 +16,13 @@ from core.display import (STATIC_BG, flash_surf, glow_surf, particle_surf,
 from core.fonts import FONT_SMALL
 from effects.particles import spawn_impact_particles
 from models.base import BaseModel
-from models.collision_data import CollisionSnapshot
+from models.collision_data import ConservationState, CollisionSnapshot
 from presentation.collision_explainer import CollisionExplainer
 from replay.timeline import ReplayFrame, ReplayTimeline
+from render.energy import EnergyState
 from render.primitives import draw_arrow, draw_text, rounded_rect
-from render.energy_flow import draw_energy_flow
-from render.replay_fx import draw_impact_fx
+from render.energy.energy_renderer import draw_energy_flow
+from render.replay_fx import draw_friction_heat_fx, draw_impact_fx
 from ui.widgets import InputBox
 from utils import clamp, format_sig3
 
@@ -118,11 +119,22 @@ class BallHitsRod(BaseModel):
         ball_v = self.ball_v if ball_v is None else ball_v
         phase = self.phase if phase is None else phase
         potential = self.gravity_potential(theta)
-        rod_energy = 0.5 * self.inertia() * omega * omega + potential
-        ball_energy = 0.5 * self.sliders["m"].value * ball_v * ball_v
-        total_energy = rod_energy + ball_energy
-        angular_momentum = self.inertia() * omega + (
-            self.sliders["m"].value * self.current_h() * ball_v
+        rod_kinetic = 0.5 * self.inertia() * omega * omega
+        ball_kinetic = 0.5 * self.sliders["m"].value * ball_v * ball_v
+        rod_energy = rod_kinetic + potential
+        total_energy = rod_energy + ball_kinetic
+        rod_angular_momentum = self.inertia() * omega
+        ball_angular_momentum = self.sliders["m"].value * self.current_h() * ball_v
+        angular_momentum = rod_angular_momentum + ball_angular_momentum
+        collision_loss = 0.0
+        if phase == "after":
+            collision_loss = (
+                collision.collision_energy_loss
+                if collision is not None
+                else self.collision_energy_loss
+            )
+        energy_residual = (
+            self.initial_energy - total_energy - collision_loss - self.damping_energy
         )
         return ReplayFrame(
             time=self.t,
@@ -133,7 +145,14 @@ class BallHitsRod(BaseModel):
             ball_v=ball_v,
             mechanical_energy=rod_energy,
             total_energy=total_energy,
+            rod_kinetic_energy=rod_kinetic,
+            ball_kinetic_energy=ball_kinetic,
+            potential_energy=potential,
+            collision_energy_loss=collision_loss,
             friction_energy=self.damping_energy,
+            energy_residual=energy_residual,
+            rod_angular_momentum=rod_angular_momentum,
+            ball_angular_momentum=ball_angular_momentum,
             angular_momentum=angular_momentum,
             collision=collision,
             collision_id=collision_id,
@@ -319,17 +338,25 @@ class BallHitsRod(BaseModel):
         collision = self.collision_energy_loss if committed else 0.0
         damping = self.damping_energy if committed else 0.0
         residual = initial - mechanical - collision - damping
-        return {
-            "initial": initial,
-            "mechanical": mechanical,
-            "collision": collision,
-            "damping": damping,
-            "residual": residual,
-            "collision_energy_loss": collision,
-            "damping_energy": damping,
-            "friction": damping,
-            "friction_energy": damping,
-        }
+        rod_kinetic = 0.5 * self.inertia() * self.omega * self.omega
+        ball_kinetic = 0.5 * self.sliders["m"].value * self.ball_v * self.ball_v
+        potential = self.gravity_potential()
+        return EnergyState(
+            initial=initial,
+            mechanical=mechanical,
+            rod_kinetic=rod_kinetic,
+            ball_kinetic=ball_kinetic,
+            potential=potential,
+            collision_loss=collision,
+            friction_heat=damping,
+            residual=residual,
+        )
+
+    def conservation_report(self):
+        """返回最近一次碰撞的角动量守恒与能量耗散报告。"""
+        if self.last_result is None:
+            return None
+        return self.last_result.conservation_report()
 
     @property
     def friction_energy(self):
@@ -523,6 +550,29 @@ class BallHitsRod(BaseModel):
         system_p_before = m * u_before + rod_p_before
         system_p_after = m * v_after + rod_p_after
 
+        conservation_before = ConservationState(
+            angular_momentum=total_L_before,
+            mechanical_energy=ke_before + potential,
+            rod_angular_momentum=rod_L_before,
+            ball_angular_momentum=ball_MRV_before,
+            ball_linear_momentum=m * u_before,
+            system_linear_momentum=system_p_before,
+            rod_kinetic_energy=rod_ke_before,
+            ball_kinetic_energy=ball_ke_before,
+            potential_energy=potential,
+        )
+        conservation_after = ConservationState(
+            angular_momentum=total_L_after,
+            mechanical_energy=ke_after + potential,
+            rod_angular_momentum=rod_L_after,
+            ball_angular_momentum=ball_MRV_after,
+            ball_linear_momentum=m * v_after,
+            system_linear_momentum=system_p_after,
+            rod_kinetic_energy=rod_ke_after,
+            ball_kinetic_energy=ball_ke_after,
+            potential_energy=potential,
+        )
+
         return CollisionSnapshot(
             m=m, M=M, L=L, I=I, h=h, e=e, theta_before=self.theta,
             u_before=u_before, v_after=v_after,
@@ -551,6 +601,8 @@ class BallHitsRod(BaseModel):
             # 系统线动量的变化就是转轴外冲量；在 h=2L/3 时应为零。
             pivot_impulse=system_p_after - system_p_before,
             impact_time=self.t,
+            conservation_before=conservation_before,
+            conservation_after=conservation_after,
         )
 
     def apply_collision_result(self, result, spawn_fx=True):
@@ -821,22 +873,16 @@ class BallHitsRod(BaseModel):
             replay_frame.friction_energy if replay_active else self.damping_energy
         )
         if replay_active:
-            display_account = {
-                "initial": self.initial_energy,
-                "mechanical": replay_frame.total_energy,
-                "collision": (
-                    display_collision.collision_energy_loss
-                    if display_collision is not None and display_phase == "after"
-                    else 0.0
-                ),
-                "damping": display_friction_energy,
-                "residual": self.initial_energy - replay_frame.total_energy
-                - (
-                    display_collision.collision_energy_loss
-                    if display_collision is not None and display_phase == "after"
-                    else 0.0
-                ) - display_friction_energy,
-            }
+            display_account = EnergyState(
+                initial=self.initial_energy,
+                mechanical=replay_frame.total_energy,
+                rod_kinetic=replay_frame.rod_kinetic_energy,
+                ball_kinetic=replay_frame.ball_kinetic_energy,
+                potential=replay_frame.potential_energy,
+                collision_loss=replay_frame.collision_energy_loss,
+                friction_heat=display_friction_energy,
+                residual=replay_frame.energy_residual,
+            )
         else:
             display_account = self.energy_breakdown()
 
@@ -1069,6 +1115,16 @@ class BallHitsRod(BaseModel):
                 screen, (cpx, cpy), replay_frame.impact_flash,
                 replay_frame.impact_strength,
             )
+        if replay_active:
+            draw_friction_heat_fx(
+                screen, scene_pivot, replay_frame.friction_energy,
+                scale=0.85,
+            )
+        elif self.phase == "after":
+            draw_friction_heat_fx(
+                screen, scene_pivot, self.damping_energy,
+                scale=0.85,
+            )
 
         if abs(display_ball_v) > 0.01:
             arrow_len = clamp(abs(display_ball_v) * scale * 0.07, 35, 150)
@@ -1105,8 +1161,8 @@ class BallHitsRod(BaseModel):
                 + self.collision_snapshot.potential
             )
         elif replay_active:
-            ball_MRV_now = m * h * display_ball_v
-            rod_L_now = replay_frame.angular_momentum - ball_MRV_now
+            ball_MRV_now = replay_frame.ball_angular_momentum
+            rod_L_now = replay_frame.rod_angular_momentum
             display_mechanical_energy = replay_frame.total_energy
         else:
             rod_L_now = I * self.omega
@@ -1122,7 +1178,8 @@ class BallHitsRod(BaseModel):
             f"碰撞点速率 h*w = {format_sig3(display_point_speed)} m/s",
             f"机械能 E = {format_sig3(display_mechanical_energy)} J",
             f"摩擦耗散 Wf = {format_sig3(display_friction_energy)} J",
-            f"总角动量 = {format_sig3(total_L_now)} kg*m^2/s",
+            f"绕转轴总角动量 = {format_sig3(total_L_now)} kg*m^2/s",
+            f"小球自身线动量 = {format_sig3(m * display_ball_v)} kg*m/s",
         ]
         collision_lines = None
         result = display_collision if replay_active else self.last_result
@@ -1134,14 +1191,15 @@ class BallHitsRod(BaseModel):
                 f"恢复系数 e = {format_sig3(r['e'])}",
                 f"碰前杆角动量 = {format_sig3(r['rod_L_before'])}",
                 f"碰前小球 MRV = {format_sig3(r['ball_MRV_before'])}",
-                f"碰前总角动量 = {format_sig3(r['total_L_before'])}",
+                f"碰前绕轴总角动量 = {format_sig3(r['total_L_before'])}",
                 f"碰后杆角动量 = {format_sig3(r['rod_L_after'])}",
                 f"碰后小球 MRV = {format_sig3(r['ball_MRV_after'])}",
-                f"碰后总角动量 = {format_sig3(r['total_L_after'])}",
+                f"碰后绕轴总角动量 = {format_sig3(r['total_L_after'])}",
                 f"角动量误差 = {format_sig3(abs(r['total_L_after'] - r['total_L_before']))}",
                 f"均匀细杆打击中心 2L/3 = {format_sig3(self.percussion_center())} m",
                 f"转轴外冲量 = {format_sig3(r['pivot_impulse'])} N*s（h=2L/3 时为零）",
-                f"能量误差 = {format_sig3(abs(r['energy_after'] - r['energy_before']))} J",
+                f"碰撞能量耗散 = {format_sig3(r['collision_energy_loss'])} J",
+                f"碰撞账本残差 = {format_sig3(r.conservation_report()['energy_residual'])} J",
             ]
         self.draw_info_panel(
             current_lines, collision_lines,
@@ -1151,5 +1209,5 @@ class BallHitsRod(BaseModel):
                 "超出范围时自动使用 90° 摆角和初始角速度",
                 "势能零点在杆竖直向下；恒定摩擦矩 tau_f=-tau0*sign(w)",
             ],
-            ("目标碰撞点速率", "恢复系数", "碰后总角动量", "角动量误差", "能量误差")
+            ("目标碰撞点速率", "恢复系数", "碰后绕轴总角动量", "角动量误差", "碰撞账本残差")
         )
