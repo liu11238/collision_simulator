@@ -237,9 +237,9 @@ class CollisionExplainer:
         p = self.momentum_progress
         rod_l = self.rod_L_display()
         ball_l = self.ball_MRV_display()
-        max_value = max(
-            abs(s.total_L_before), abs(s.total_L_after), abs(rod_l), abs(ball_l), 1e-9
-        )
+        total_scale = max(abs(s.total_L_before), abs(s.total_L_after), 1e-9)
+        rod_scale = max(abs(s.rod_L_before), abs(s.rod_L_after), 1e-9)
+        ball_scale = max(abs(s.ball_MRV_before), abs(s.ball_MRV_after), 1e-9)
         bar_w = rect.w - 220
         x = rect.x + 185
 
@@ -248,16 +248,17 @@ class CollisionExplainer:
         draw_text(surface, "总角动量守恒  L杆 + L球",
                   (rect.x + 20, rect.y + 78), FONT_TINY, TEXT)
         self._draw_signed_bar(
-            surface, x, rect.y + 81, bar_w, s.total_L_before, max_value, ACCENT_3, 10
+            surface, x, rect.y + 81, bar_w, s.total_L_before, total_scale, ACCENT_3, 10
         )
         draw_text(surface, f"{format_sig3(s.total_L_before)} kg*m^2/s",
                   (rect.right - 20, rect.y + 77), FONT_TINY, ACCENT_3, anchor="topright")
 
-        rows = (("杆 Iω", rod_l, ACCENT_2), ("球 m h v", ball_l, ACCENT_3))
+        rows = (("杆 Iω", rod_l, rod_scale, ACCENT_2),
+                ("球 m h v", ball_l, ball_scale, ACCENT_3))
         y = rect.y + 111
-        for label, value, color in rows:
+        for label, value, scale, color in rows:
             draw_text(surface, label, (rect.x + 20, y), FONT_TINY, TEXT)
-            self._draw_signed_bar(surface, x, y + 2, bar_w, value, max_value, color, 11)
+            self._draw_signed_bar(surface, x, y + 2, bar_w, value, scale, color, 11)
             draw_text(surface, f"{format_sig3(value)} kg*m^2/s",
                       (rect.right - 20, y - 2), FONT_TINY, color, anchor="topright")
             y += 29

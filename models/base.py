@@ -5,13 +5,13 @@ from __future__ import annotations
 import pygame
 
 from config import (ACCENT, ACCENT_2, ACCENT_3, BASE_Y, BOTTOM_ACTION_Y,
-                    BOTTOM_CARD_H, BOTTOM_CARD_Y, BOTTOM_FORMULA_H, BOTTOM_FORMULA_Y,
-                    BOTTOM_LEFT_X, BOTTOM_PANEL_H, BOTTOM_PANEL_TOP,
-                    BOTTOM_RIGHT_X, BOTTOM_SUMMARY_Y, BOTTOM_TIMELINE_LABEL_Y,
+                    BOTTOM_FORMULA_H, BOTTOM_FORMULA_Y, BOTTOM_TIMELINE_LABEL_Y,
                     BOTTOM_TIMELINE_W, BOTTOM_TIMELINE_X, BOTTOM_TIMELINE_Y,
-                    INPUT_GAP, INPUT_W, LEFT_INPUT_X, LEFT_X, MUTED, PANEL,
-                    PANEL_2, RIGHT_INPUT_X, RIGHT_X, ROW, SIM_H, SLIDER_W,
-                    TEXT, TITLE_LETTER_SPACING, UI_H, WIDTH)
+                    CONTROLS_X, CONTROLS_Y, CONTROLS_W, INFO_H, INFO_W, INFO_X,
+                    INFO_Y, INPUT_GAP, INPUT_W, LEFT_INPUT_X, LEFT_X, MUTED,
+                    PANEL, PANEL_2, RIGHT_INPUT_X, RIGHT_X, ROW, SIM_H,
+                    SLIDER_W, TEXT, TITLE_LETTER_SPACING, UI_H, WIDTH,
+                    ANALYSIS_H, ANALYSIS_W, ANALYSIS_X, ANALYSIS_Y)
 from core.display import clock, screen
 from core.fonts import FONT, FONT_BIG, FONT_SMALL, FONT_TINY, FONT_TITLE
 from effects.particles import Particle, ShockWave
@@ -37,7 +37,7 @@ class BaseModel:
         self.shockwaves: list[ShockWave] = []
 
         self._info_glass = pygame.Surface(
-            (438, SIM_H - 140), pygame.SRCALPHA
+            (INFO_W, INFO_H), pygame.SRCALPHA
         ).convert_alpha()
         rounded_rect(self._info_glass, self._info_glass.get_rect(),
                      (38, 52, 88, 55), 18)
@@ -118,7 +118,7 @@ class BaseModel:
         return "", ""
 
     def formula_rect(self):
-        return pygame.Rect(690, BOTTOM_FORMULA_Y, 528, BOTTOM_FORMULA_H)
+        return pygame.Rect(CONTROLS_X, BOTTOM_FORMULA_Y, CONTROLS_W, BOTTOM_FORMULA_H)
 
     def summary_line(self):
         return ""
@@ -180,15 +180,10 @@ class BaseModel:
         pygame.draw.line(screen, (65, 80, 125), (0, ui_y), (WIDTH, ui_y), 2)
         pygame.draw.line(screen, (90, 110, 160), (0, ui_y + 1), (WIDTH, ui_y + 1), 1)
 
-
-        rounded_rect(screen, pygame.Rect(BOTTOM_LEFT_X,
-                                         ui_y + BOTTOM_PANEL_TOP, 604,
-                                         BOTTOM_PANEL_H),
-                     PANEL_2, 18, 1, (58, 72, 112))
-        rounded_rect(screen, pygame.Rect(BOTTOM_RIGHT_X,
-                                         ui_y + BOTTOM_PANEL_TOP, 580,
-                                         BOTTOM_PANEL_H),
-                     PANEL_2, 18, 1, (58, 72, 112))
+        analysis_rect = pygame.Rect(ANALYSIS_X, ANALYSIS_Y, ANALYSIS_W, ANALYSIS_H)
+        controls_rect = pygame.Rect(CONTROLS_X, CONTROLS_Y, CONTROLS_W, UI_H)
+        rounded_rect(screen, analysis_rect, PANEL_2, 14, 1, (58, 72, 112))
+        rounded_rect(screen, controls_rect, PANEL_2, 14, 1, (58, 72, 112))
 
         for key, slider in self.sliders.items():
             self.draw_slider_value(key, slider)
@@ -205,13 +200,17 @@ class BaseModel:
                   (formula_rect.x + 12, formula_rect.y + 28), FONT_SMALL, MUTED)
 
         self.app.btn_start.draw(screen, self.running)
-
         self.app.btn_reset.draw(screen)
         self.app.btn_snap.draw(screen)
-        draw_text(screen, self.summary_line(), (535, BOTTOM_SUMMARY_Y),
-                  FONT_SMALL, (165, 182, 218))
         self.draw_timeline()
-        self.draw_summary_cards()
+        self.draw_analysis_panel()
+
+    def draw_analysis_panel(self):
+        """绘制底部左侧分析区；模型可覆写以嵌入讲解或能量流。"""
+        rect = pygame.Rect(ANALYSIS_X, ANALYSIS_Y, ANALYSIS_W, ANALYSIS_H)
+        draw_text(screen, "碰撞分析", (rect.x + 14, rect.y + 10), FONT_SMALL, TEXT)
+        draw_text(screen, self.summary_line(), (rect.x + 14, rect.y + 38),
+                  FONT_TINY, MUTED)
 
     def draw_timeline(self):
         if not hasattr(self, "replay"):
@@ -234,69 +233,8 @@ class BaseModel:
         self.timeline_slider.draw(screen, collision_times, collision_windows)
 
     def draw_summary_cards(self):
-        """在底部给出可快速读出的 Energy / Collision 双栏摘要。"""
-        y = BOTTOM_CARD_Y
-        left = pygame.Rect(BOTTOM_LEFT_X, y, 604, BOTTOM_CARD_H)
-        right = pygame.Rect(BOTTOM_RIGHT_X, y, 580, BOTTOM_CARD_H)
-        for rect in (left, right):
-            rounded_rect(screen, rect, (18, 26, 46), 10, 1, (48, 64, 100))
-
-        if hasattr(self, "energy_breakdown"):
-            account = self.energy_breakdown()
-            replay_frame = self.replay_frame() if getattr(
-                self, "replay_mode", False
-            ) and hasattr(self, "replay_frame") else None
-            if replay_frame is not None:
-                account = EnergyState(
-                    initial=self.initial_energy,
-                    mechanical=replay_frame.total_energy,
-                    rod_kinetic=replay_frame.rod_kinetic_energy,
-                    ball_kinetic=replay_frame.ball_kinetic_energy,
-                    potential=replay_frame.potential_energy,
-                    collision_loss=replay_frame.collision_energy_loss,
-                    friction_heat=replay_frame.friction_energy,
-                    residual=replay_frame.energy_residual,
-                )
-            draw_text(screen, "Energy", (left.x + 12, left.y + 8), FONT_SMALL,
-                      ACCENT_3)
-            draw_text(screen,
-                      f"机械能 {format_sig3(account.get('mechanical', 0.0))} J  "
-                      f"碰撞损失 {format_sig3(account.get('collision', 0.0))} J  "
-                      f"摩擦热 {format_sig3(account.get('friction_heat', 0.0))} J",
-                      (left.x + 98, left.y + 10), FONT_TINY, TEXT)
-            draw_text(screen, f"账本误差 {format_sig3(account.get('residual', 0.0))} J",
-                      (left.x + 12, left.y + 32), FONT_TINY, MUTED)
-        else:
-            draw_text(screen, "Energy", (left.x + 12, left.y + 18), FONT_SMALL, ACCENT_3)
-            draw_text(screen, "当前模型未提供能量账本", (left.x + 98, left.y + 18),
-                      FONT_TINY, MUTED)
-
-        result = getattr(self, "last_result", None)
-        replay_frame = self.replay_frame() if getattr(
-            self, "replay_mode", False
-        ) and hasattr(self, "replay_frame") else None
-        if replay_frame is not None:
-            result = (
-                self.replay_collision_snapshot(replay_frame)
-                if hasattr(self, "replay_collision_snapshot")
-                else replay_frame.collision
-            )
-        draw_text(screen, "Collision", (right.x + 12, right.y + 8), FONT_SMALL,
-                  ACCENT_2)
-        if result:
-            if hasattr(result, "impulse"):
-                text = (f"t={format_sig3(result.impact_time)} s  "
-                        f"J={format_sig3(result.impulse)} N*s  "
-                        f"e={format_sig3(result.e)}")
-            else:
-                text = (f"t={format_sig3(result['impact_time'])} s  "
-                        f"J={format_sig3(result['impulse'])} N*s  "
-                        f"e={format_sig3(result['e'])}")
-            draw_text(screen, text, (right.x + 112, right.y + 10), FONT_TINY, TEXT)
-            draw_text(screen, "碰撞标记可在时间轴上拖拽查看碰前 / 碰后帧",
-                      (right.x + 12, right.y + 32), FONT_TINY, MUTED)
-        else:
-            draw_text(screen, "尚未发生碰撞", (right.x + 112, right.y + 18), FONT_TINY, MUTED)
+        """旧摘要卡兼容入口；实际内容已经迁移到统一分析面板。"""
+        self.draw_analysis_panel()
 
     def draw_header(self, state_text, display_time=None):
         # 标题采用逐字绘制，确保中文字符之间有明显的横向间距。
@@ -334,7 +272,7 @@ class BaseModel:
 
     def draw_info_panel(self, current_lines, collision_lines=None, tips=None,
                         highlight_keywords=()):
-        info_rect = pygame.Rect(815, 118, 438, SIM_H - 140)
+        info_rect = pygame.Rect(INFO_X, INFO_Y, INFO_W, INFO_H)
         rounded_rect(screen, info_rect, (10, 16, 32), 18)
         screen.blit(self._info_glass, info_rect.topleft)
 

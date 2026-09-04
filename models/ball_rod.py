@@ -10,10 +10,11 @@ from config import (ACCENT, ACCENT_2, ACCENT_3, BALL1_COLOR, BALL1_EDGE,
                     BALL1_GLOW, BASE_Y, BOTTOM_FORMULA_H, BOTTOM_FORMULA_Y,
                     GREEN, INPUT_W, MUTED, PLATFORM, PLATFORM_TOP,
                     RIGHT_INPUT_X, ROD_COLOR, ROD_EDGE, ROD_GLOW, ROW, SIM_H,
-                    WIDTH)
+                    WIDTH, ANALYSIS_H, ANALYSIS_W, ANALYSIS_X, ANALYSIS_Y,
+                    CONTROLS_X, CONTROLS_W, TEXT, SCENE_X, SCENE_W)
 from core.display import (STATIC_BG, flash_surf, glow_surf, particle_surf,
                           screen, trail_surf_1, trail_surf_2)
-from core.fonts import FONT_SMALL
+from core.fonts import FONT_BIG, FONT_SMALL, FONT_TINY
 from effects.particles import spawn_impact_particles
 from models.base import BaseModel
 from models.collision_data import ConservationState, CollisionSnapshot
@@ -40,7 +41,7 @@ class BallHitsRod(BaseModel):
     short_name = "质点‑定轴细杆"
     EPS = 1e-12
     MAX_SUBSTEP = 0.0025
-    control_row_height = 42
+    control_row_height = 34
     supports_impact_explanation = True
 
     def __init__(self):
@@ -799,7 +800,7 @@ class BallHitsRod(BaseModel):
         )
 
     def formula_rect(self):
-        return pygame.Rect(690, BOTTOM_FORMULA_Y, 528, BOTTOM_FORMULA_H)
+        return pygame.Rect(CONTROLS_X, BOTTOM_FORMULA_Y, CONTROLS_W, BOTTOM_FORMULA_H)
 
     def summary_line(self):
         mode = "重力释放" if not self.uses_initial_speed else "90°+初始角速度"
@@ -834,7 +835,7 @@ class BallHitsRod(BaseModel):
             (SIM_H - 235) / (equivalent_old_L + 0.35),
         )
         scale = physical_scale_ratio * old_scale
-        pivot = (565, 195)
+        pivot = (SCENE_X + int(SCENE_W * 0.63), 195)
 
         explainer = (
             self.impact_explainer
@@ -1139,18 +1140,10 @@ class BallHitsRod(BaseModel):
             draw_text(screen, "小球静止等待碰撞", (245, 205), FONT_SMALL, ACCENT_3)
 
         if self.notice and not replay_active:
-            notice_rect = pygame.Rect(38, 192, 730, 40)
+            notice_rect = pygame.Rect(SCENE_X + 14, 192, SCENE_W - 28, 40)
             rounded_rect(screen, notice_rect, (62, 28, 38), 10, 1, (145, 65, 80))
             draw_text(screen, self.notice, notice_rect.center,
                       FONT_SMALL, (255, 185, 190), anchor="center")
-
-        if not replay_active and self.phase == "impact_explain" and self.impact_explainer is not None:
-            self.impact_explainer.draw(screen, pygame.Rect(38, 376, 730, 228))
-
-        if (not replay_active and self.phase == "after") or (
-                replay_active and display_phase == "after"):
-            draw_energy_flow(screen, pygame.Rect(38, 244, 730, 126),
-                             display_account)
 
         if explainer:
             rod_L_now = explainer.rod_L_display()
@@ -1170,6 +1163,13 @@ class BallHitsRod(BaseModel):
             display_mechanical_energy = self.total_mechanical_energy()
         total_L_now = rod_L_now + ball_MRV_now
         display_point_speed = display_contact_speed
+        self._analysis_explainer = explainer
+        self._analysis_account = display_account
+        self._analysis_show_energy = (
+            (not replay_active and self.phase == "after")
+            or (replay_active and display_phase == "after")
+        )
+        self._analysis_angular_momentum = (rod_L_now, ball_MRV_now, total_L_now)
         current_lines = [
             f"重力加速度 g = {format_sig3(self.sliders['g'].value)} m/s^2",
             f"转动惯量 I = {format_sig3(I)} kg*m^2",
@@ -1211,3 +1211,43 @@ class BallHitsRod(BaseModel):
             ],
             ("目标碰撞点速率", "恢复系数", "碰后绕轴总角动量", "角动量误差", "碰撞账本残差")
         )
+
+    def draw_analysis_panel(self):
+        """在底部分析区显示讲解过程或确定性的能量流。"""
+        rect = pygame.Rect(ANALYSIS_X, ANALYSIS_Y, ANALYSIS_W, ANALYSIS_H)
+        explainer = getattr(self, "_analysis_explainer", None)
+        if explainer is not None:
+            explainer.draw(screen, rect)
+            return
+        if getattr(self, "_analysis_show_energy", False):
+            draw_energy_flow(screen, rect, self._analysis_account)
+            return
+
+        rounded_rect(screen, rect, (8, 13, 29), 14, 1, (70, 95, 145))
+        draw_text(screen, "碰撞分析", (rect.x + 14, rect.y + 10), FONT_BIG, TEXT)
+        draw_text(screen, "角动量分量（数值为有符号量）",
+                  (rect.x + 14, rect.y + 43), FONT_TINY, MUTED)
+        rod_l, ball_l, total_l = getattr(
+            self, "_analysis_angular_momentum", (0.0, 0.0, 0.0)
+        )
+        values = (("杆 Iω", rod_l, ACCENT_2), ("球 m h v", ball_l, ACCENT_3))
+        max_value = max(abs(rod_l), abs(ball_l), abs(total_l), 1e-9)
+        x = rect.x + 112
+        width = rect.w - 230
+        zero_x = x + width // 2
+        for index, (label, value, color) in enumerate(values):
+            y = rect.y + 76 + index * 38
+            draw_text(screen, label, (rect.x + 14, y), FONT_TINY, TEXT)
+            pygame.draw.rect(screen, (30, 43, 72), (x, y + 2, width, 12), border_radius=5)
+            pygame.draw.line(screen, (220, 230, 250), (zero_x, y),
+                             (zero_x, y + 16), 1)
+            bar = int((width // 2 - 5) * clamp(abs(value) / max_value, 0.0, 1.0))
+            if bar:
+                bar_rect = (zero_x, y + 2, bar, 12) if value >= 0 else (
+                    zero_x - bar, y + 2, bar, 12
+                )
+                pygame.draw.rect(screen, color, bar_rect, border_radius=5)
+            draw_text(screen, format_sig3(value), (rect.right - 14, y - 1),
+                      FONT_TINY, color, anchor="topright")
+        draw_text(screen, f"总角动量 = {format_sig3(total_l)} kg*m^2/s",
+                  (rect.x + 14, rect.bottom - 28), FONT_SMALL, ACCENT_3)
