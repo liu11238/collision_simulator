@@ -8,7 +8,7 @@ from typing import Callable
 
 import pygame
 
-from config import SIM_H, WIDTH
+from config import LAYOUT
 from utils import clamp, lerp_color
 
 class Particle:
@@ -52,7 +52,7 @@ class Particle:
 
     def draw(self, surface, world_to_screen: Callable[[float, float], tuple[int, int]], streak_scale=8.0):
         sx, sy = world_to_screen(self.x, self.y)
-        if sx < -120 or sx > WIDTH + 120 or sy < -120 or sy > SIM_H + 120:
+        if sx < -120 or sx > LAYOUT.width + 120 or sy < -120 or sy > LAYOUT.sim_h + 120:
             return
         t = self.t
         alpha = int(255 * t)

@@ -16,8 +16,7 @@ if str(ROOT) not in sys.path:
 
 import pygame  # noqa: E402
 
-from config import (BOTTOM_ACTION_Y, BOTTOM_ACTION_H, BOTTOM_CARD_Y,
-                    BOTTOM_CARD_H, BOTTOM_FORMULA_Y, SIM_H, UI_H)
+from config import LAYOUT  # noqa: E402
 from main import App  # noqa: E402
 from models.ball_rod import BallHitsRod  # noqa: E402
 from replay.timeline import ReplayFrame, ReplayTimeline  # noqa: E402
@@ -74,13 +73,18 @@ class ReplayRegressionTest(unittest.TestCase):
         )
         self.assertGreater(model.replay.duration, model.t)
 
-    def test_bottom_layout_rects_do_not_overlap(self):
+    def test_footer_layout_rects_do_not_overlap(self):
         app = App()
-        self.assertLess(BOTTOM_ACTION_Y + BOTTOM_ACTION_H, BOTTOM_CARD_Y)
-        self.assertLess(BOTTOM_FORMULA_Y + 52, BOTTOM_ACTION_Y)
-        self.assertLess(BOTTOM_CARD_Y + BOTTOM_CARD_H, SIM_H + UI_H)
+        footer = pygame.Rect(LAYOUT.footer)
+        formula = pygame.Rect(LAYOUT.formula)
+        action = pygame.Rect(LAYOUT.action)
+        self.assertTrue(footer.contains(formula))
+        self.assertTrue(footer.contains(action))
+        self.assertFalse(formula.colliderect(action))
         self.assertTrue(app.btn_start.rect.colliderect(app.btn_reset.rect) is False)
         self.assertTrue(app.btn_reset.rect.colliderect(app.btn_snap.rect) is False)
+        self.assertTrue(footer.contains(app.btn_start.rect))
+        self.assertTrue(footer.contains(app.btn_snap.rect))
 
 
 if __name__ == "__main__":

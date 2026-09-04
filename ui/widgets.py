@@ -28,15 +28,7 @@ class Slider:
     dragging: bool = False
 
     def __post_init__(self):
-        self._static_track = pygame.Surface((self.w + 1, 16), pygame.SRCALPHA)
-        pygame.draw.line(self._static_track, (40, 50, 80),
-                         (0, 10), (self.w, 10), 8)
-        pygame.draw.line(self._static_track, (55, 68, 105),
-                         (0, 8), (self.w, 8), 6)
-        for i in range(6):
-            tx = i * self.w / 5
-            pygame.draw.line(self._static_track, (80, 95, 135),
-                             (tx, 2), (tx, 14), 1)
+        self._build_track()
 
     def knob_x(self):
         t = (self.value - self.vmin) / max(1e-12, self.vmax - self.vmin)
@@ -49,6 +41,25 @@ class Slider:
         t = clamp((mx - self.x) / self.w, 0.0, 1.0)
 
         self.value = self.vmin + t * (self.vmax - self.vmin)
+
+    def set_rect(self, x, y, w):
+        """响应式重排：更新滑块位置和轨道宽度并重建静态轨道图层。"""
+        self.x = int(x)
+        self.y = int(y)
+        self.w = max(40, int(w))
+        self._static_track = None
+        self._build_track()
+
+    def _build_track(self):
+        self._static_track = pygame.Surface((self.w + 1, 16), pygame.SRCALPHA)
+        pygame.draw.line(self._static_track, (40, 50, 80),
+                         (0, 10), (self.w, 10), 8)
+        pygame.draw.line(self._static_track, (55, 68, 105),
+                         (0, 8), (self.w, 8), 6)
+        for i in range(6):
+            tx = i * self.w / 5
+            pygame.draw.line(self._static_track, (80, 95, 135),
+                             (tx, 2), (tx, 14), 1)
 
     def handle_event(self, event):
         changed = False
@@ -83,12 +94,16 @@ class Slider:
 
         pygame.draw.circle(surface, (140, 200, 255), (kx, self.y), 8)
         pygame.draw.circle(surface, (220, 245, 255), (kx - 4, self.y - 4), 4)
-        draw_text(surface, self.label, (self.x, self.y - 30), FONT_SMALL, MUTED)
+        label_width = max(40, int(self.w * 0.62))
+        value_width = max(40, self.w - label_width + 10)
+        draw_text(surface, self.label, (self.x, self.y - 30), FONT_SMALL,
+                  MUTED, max_width=label_width)
         if value_text is None:
             value_text = f"{format_sig3(self.value)}{self.unit}"
         if show_value:
             draw_text(surface, value_text, (self.x + self.w, self.y - 30),
-                      FONT_SMALL, TEXT, anchor="topright")
+                      FONT_SMALL, TEXT, anchor="topright",
+                      max_width=value_width)
 
 
 class TimelineSlider:
@@ -99,6 +114,10 @@ class TimelineSlider:
         self.duration = max(0.0, float(duration))
         self.value = 0.0
         self.dragging = False
+
+    def set_rect(self, x, y, w):
+        """响应式重排：更新时间轴矩形（高度固定为 28）。"""
+        self.rect = pygame.Rect(int(x), int(y), max(120, int(w)), 28)
 
     def set_duration(self, duration):
         self.duration = max(0.0, float(duration))
@@ -169,6 +188,10 @@ class Button:
     rect: pygame.Rect
     _hover: bool = field(default=False, init=False, repr=False)
 
+    def set_rect(self, rect):
+        """响应式重排：更新按钮矩形。"""
+        self.rect = pygame.Rect(rect)
+
     def draw(self, surface, active=False):
         self._hover = self.rect.collidepoint(pygame.mouse.get_pos())
         if active:
@@ -183,7 +206,7 @@ class Button:
                          (self.rect.x + 5, self.rect.y + 2,
                           self.rect.w - 10, 2), border_radius=2)
         draw_text(surface, self.text, self.rect.center,
-                  FONT_SMALL, TEXT, anchor="center")
+                  FONT_SMALL, TEXT, anchor="center", max_width=self.rect.w - 12)
 
     def clicked(self, event):
         return (event.type == pygame.MOUSEBUTTONDOWN
@@ -214,6 +237,11 @@ class InputBox:
         if self.key in ("anim_speed", "speed"):
             return f"{value:.2f}"
         return format_num(value)
+
+    def set_rect(self, x, y, w, h=None):
+        """响应式重排：更新输入框矩形。"""
+        self.rect = pygame.Rect(int(x), int(y), max(40, int(w)),
+                                self.rect.h if h is None else int(h))
 
     def set_text_value(self, value):
         if not self.active:

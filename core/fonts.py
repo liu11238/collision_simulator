@@ -1,12 +1,20 @@
-"""字体加载和应用程序字体实例。"""
+"""字体加载和应用程序字体实例。
+
+字体实例通过 LRU 缓存复用；``font(size, bold)`` 是语义化取字体的
+统一入口，供响应式排版按 ``LayoutMetrics`` 中的字号动态取用。
+"""
 
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 
 import pygame
 
+
+@lru_cache(maxsize=256)
 def get_font(size: int, bold: bool = False):
+    size = max(6, int(size))
     win_dir = os.environ.get("WINDIR", r"C:\Windows")
 
     paths = [
@@ -33,6 +41,11 @@ def get_font(size: int, bold: bool = False):
 
     font.set_bold(bold)
     return font
+
+
+def font(size: int, bold: bool = False):
+    """语义化字体入口；带缓存，同参数永远返回同一实例。"""
+    return get_font(size, bold)
 
 
 FONT = get_font(20)

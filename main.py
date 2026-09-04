@@ -1,4 +1,4 @@
-"""应用程序入口、模型切换和 pygame 事件循环。"""
+"""应用程序入口、模型切换、响应式缩放和 pygame 事件循环。"""
 
 from __future__ import annotations
 
@@ -6,11 +6,23 @@ import sys
 
 import pygame
 
-from config import FPS, LAYOUT
-from core.display import clock, screen
+from config import (DEFAULT_HEIGHT, DEFAULT_WIDTH, FPS, LAYOUT, MIN_HEIGHT,
+                    MIN_WIDTH)
+from core import display
 from models.ball_ball import BallBallCollision
 from models.ball_rod import BallHitsRod
 from ui.widgets import Button
+
+
+def _event_size(event):
+    """从 VIDEORESIZE / WINDOWSIZECHANGED 事件中提取新窗口尺寸。"""
+    for w_attr, h_attr in (("w", "h"), ("width", "height"), ("x", "y")):
+        w = getattr(event, w_attr, None)
+        h = getattr(event, h_attr, None)
+        if isinstance(w, int) and isinstance(h, int) and w > 0 and h > 0:
+            return w, h
+    return None
+
 
 class App:
     def __init__(self):
@@ -18,24 +30,36 @@ class App:
         for model in self.models:
             model.app = self
         self.mode_index = 0
+        self._build_buttons()
 
+    def _build_buttons(self):
         action = pygame.Rect(LAYOUT.action)
-        self.btn_start = Button(
-            "开始 / 暂停",
-            pygame.Rect(action.x, action.y, min(145, action.w), action.h),
-        )
+        tabs = pygame.Rect(LAYOUT.tabs)
+
+        snap_w, reset_w, start_w, gap = 112, 64, 132, 8
+        x = action.right - (start_w + gap + reset_w + gap + snap_w)
+        self.btn_start = Button("开始 / 暂停",
+                                pygame.Rect(x, action.y, start_w, action.h))
         self.btn_reset = Button(
-            "重置",
-            pygame.Rect(action.x + 153, action.y, 74, action.h),
-        )
+            "重置", pygame.Rect(x + start_w + gap, action.y, reset_w, action.h))
         self.btn_snap = Button(
             "直接到碰撞",
-            pygame.Rect(action.x + 235, action.y, min(124, max(80, action.w - 235)), action.h),
-        )
+            pygame.Rect(x + start_w + gap + reset_w + gap, action.y,
+                        snap_w, action.h))
+
+        tab_w = min(240, (tabs.w - 12) // 2)
         self.mode_buttons = [
-            Button("1  双球一维碰撞仿真", pygame.Rect(LAYOUT.tabs[0], LAYOUT.tabs[1], 238, LAYOUT.tabs[3])),
-            Button("2  质点‑定轴细杆碰撞仿真", pygame.Rect(LAYOUT.tabs[0] + 248, LAYOUT.tabs[1], 238, LAYOUT.tabs[3])),
+            Button("1  双球一维碰撞仿真",
+                   pygame.Rect(tabs.x, tabs.y, tab_w, tabs.h)),
+            Button("2  质点‑定轴细杆碰撞仿真",
+                   pygame.Rect(tabs.x + tab_w + 12, tabs.y, tab_w, tabs.h)),
         ]
+
+    def relayout(self):
+        """窗口缩放后重排按钮和模型控件。"""
+        self._build_buttons()
+        for model in self.models:
+            model.relayout()
 
     @property
     def model(self):
@@ -57,12 +81,26 @@ class App:
 
     def draw_mode_tabs(self):
         for i, button in enumerate(self.mode_buttons):
-            button.draw(screen, active=(i == self.mode_index))
+            button.draw(display.screen, active=(i == self.mode_index))
+
+    def handle_resize_event(self, event):
+        """应用窗口缩放：更新布局几何并重建图层，绝不拉伸旧位图。"""
+        size = _event_size(event)
+        if not size:
+            return False
+        width = max(MIN_WIDTH, size[0])
+        height = max(MIN_HEIGHT, size[1])
+        if width == LAYOUT.width and height == LAYOUT.height:
+            return False
+        LAYOUT.apply(width, height)
+        display.resize_display(width, height)
+        self.relayout()
+        return True
 
     def run(self):
         running_app = True
         while running_app:
-            dt = clock.tick(FPS) / 1000.0
+            dt = display.clock.tick(FPS) / 1000.0
             model = self.model
 
             model.update_inputs(dt)
@@ -71,6 +109,10 @@ class App:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running_app = False
+                    continue
+
+                if event.type in (pygame.VIDEORESIZE, pygame.WINDOWSIZECHANGED):
+                    self.handle_resize_event(event)
                     continue
 
                 switched = False
@@ -120,6 +162,9 @@ class App:
                 if input_consumed or input_was_active:
                     continue
 
+                if model.handle_panel_scroll(event):
+                    continue
+
                 if self.btn_start.clicked(event):
                     model.start_pause()
                 if self.btn_reset.clicked(event):
@@ -135,7 +180,6 @@ class App:
             if need_reset:
                 model.reset(keep_running=False)
                 model.sync_inputs(force=False)
-
 
             model.step(dt)
             model.draw_scene()

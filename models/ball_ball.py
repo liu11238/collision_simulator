@@ -8,13 +8,9 @@ import pygame
 
 from config import (ACCENT, ACCENT_2, ACCENT_3, BALL1_COLOR, BALL1_EDGE,
                     BALL1_GLOW, BALL2_COLOR, BALL2_EDGE, BALL2_GLOW,
-                    BOTTOM_FORMULA_H, BOTTOM_FORMULA_Y, GREEN, MUTED, PLATFORM,
-                    PLATFORM_TOP,
-                    RED, SIM_H, WIDTH, ANALYSIS_H, ANALYSIS_W, ANALYSIS_X,
-                    ANALYSIS_Y, TEXT, SCENE_X, SCENE_W, CONTROLS_X, CONTROLS_W,
-                    LAYOUT, SCENE_Y, SCENE_H)
-from core.display import (STATIC_BG, flash_surf, glow_surf, particle_surf,
-                          screen, trail_surf_1, trail_surf_2)
+                    GREEN, MUTED, PLATFORM, PLATFORM_TOP,
+                    RED, TEXT, LAYOUT)
+from core import display
 from core.fonts import FONT_BIG, FONT_SMALL, FONT_TINY
 from effects.particles import spawn_impact_particles
 from models.base import BaseModel
@@ -194,30 +190,29 @@ class BallBallCollision(BaseModel):
 
         # 判定内容在底部分析区绘制，避免覆盖公式和操作按钮。
 
-    def draw_analysis_panel(self):
-        rect = pygame.Rect(ANALYSIS_X, ANALYSIS_Y, ANALYSIS_W, ANALYSIS_H)
-        rounded_rect(screen, rect, (8, 13, 29), 14, 1, (70, 95, 145))
-        draw_text(screen, "碰撞分析", (rect.x + 14, rect.y + 10), FONT_BIG, TEXT)
-        draw_text(screen, self.summary_line(), (rect.x + 14, rect.y + 43),
-                  FONT_TINY, MUTED)
+    def draw_analysis_panel(self, rect):
+        rect = pygame.Rect(rect)
+        draw_text(display.screen, self.summary_line(), (rect.x + 2, rect.y + 2),
+                  FONT_TINY, MUTED, max_width=rect.w - 4)
 
         # v1-v2 判定集中在分析区；一旦开始运行仍保留参数摘要。
         if self.phase == "ready":
             relation = "会相撞" if self.v1 > self.v2 else "不会相撞"
             delta_v = self.v1 - self.v2
-            draw_text(screen, "碰撞判定", (rect.x + 14, rect.y + 76), FONT_SMALL, MUTED)
+            draw_text(display.screen, "碰撞判定",
+                      (rect.x + 2, rect.y + 34), FONT_SMALL, MUTED)
 
-            draw_text(screen,
+            draw_text(display.screen,
                       f"v1-v2 = {format_sig3(delta_v)} m/s  →  {relation}",
-                      (rect.x + 14, rect.y + 100), FONT_SMALL,
-                      ACCENT_3 if delta_v > 0 else RED)
+                      (rect.x + 2, rect.y + 58), FONT_SMALL,
+                      ACCENT_3 if delta_v > 0 else RED, max_width=rect.w - 4)
 
     def draw_scene(self):
         m1 = self.sliders["m1"].value
         m2 = self.sliders["m2"].value
         scale = 92.0
-        origin_x = SCENE_X + int(SCENE_W * 0.44)
-        center_y = SCENE_Y + int(SCENE_H * 0.56)
+        origin_x = LAYOUT.scene_x + int(LAYOUT.scene_w * 0.44)
+        center_y = LAYOUT.scene_y + int(LAYOUT.scene_h * 0.56)
 
         radius_px = int(self.BALL_RADIUS_WORLD * scale)
         platform_y = center_y + radius_px + 14
@@ -225,21 +220,21 @@ class BallBallCollision(BaseModel):
         def w2s(x, y=0.0):
             return int(origin_x + x * scale), int(center_y - y * scale)
 
-        screen.blit(STATIC_BG, (0, 0))
-        scene_left, scene_right = SCENE_X, SCENE_X + SCENE_W
-        pygame.draw.line(screen, (22, 28, 48), (scene_left, platform_y + 10), (scene_right, platform_y + 10), 10)
-        pygame.draw.line(screen, (35, 44, 70), (scene_left, platform_y + 4), (scene_right, platform_y + 4), 8)
-        pygame.draw.line(screen, PLATFORM, (scene_left, platform_y), (scene_right, platform_y), 5)
-        pygame.draw.line(screen, PLATFORM_TOP, (scene_left, platform_y - 1), (scene_right, platform_y - 1), 2)
+        display.screen.blit(display.STATIC_BG, (0, 0))
+        scene_left, scene_right = LAYOUT.scene_x, LAYOUT.scene_x + LAYOUT.scene_w
+        pygame.draw.line(display.screen, (22, 28, 48), (scene_left, platform_y + 10), (scene_right, platform_y + 10), 10)
+        pygame.draw.line(display.screen, (35, 44, 70), (scene_left, platform_y + 4), (scene_right, platform_y + 4), 8)
+        pygame.draw.line(display.screen, PLATFORM, (scene_left, platform_y), (scene_right, platform_y), 5)
+        pygame.draw.line(display.screen, PLATFORM_TOP, (scene_left, platform_y - 1), (scene_right, platform_y - 1), 2)
 
         for tx in range(scene_left, scene_right, 18):
-            pygame.draw.line(screen, (100, 115, 155), (tx, platform_y), (tx + 6, platform_y + 4), 1)
+            pygame.draw.line(display.screen, (100, 115, 155), (tx, platform_y), (tx + 6, platform_y + 4), 1)
 
-        pygame.draw.line(screen, (80, 100, 150), (scene_left, center_y), (scene_right, center_y), 1)
+        pygame.draw.line(display.screen, (80, 100, 150), (scene_left, center_y), (scene_right, center_y), 1)
         for world_x in range(-4, 5):
             sx, _ = w2s(world_x)
-            pygame.draw.line(screen, (85, 105, 150), (sx, center_y - 7), (sx, center_y + 7), 1)
-            draw_text(screen, f"{world_x}", (sx, center_y + 12), FONT_TINY, MUTED, anchor="midtop")
+            pygame.draw.line(display.screen, (85, 105, 150), (sx, center_y - 7), (sx, center_y + 7), 1)
+            draw_text(display.screen, f"{world_x}", (sx, center_y + 12), FONT_TINY, MUTED, anchor="midtop")
 
 
         if not self.collided:
@@ -248,67 +243,67 @@ class BallBallCollision(BaseModel):
             if right_surface > left_surface:
                 p1 = w2s(left_surface, -0.72)
                 p2 = w2s(right_surface, -0.72)
-                pygame.draw.line(screen, (105, 125, 175), p1, p2, 2)
+                pygame.draw.line(display.screen, (105, 125, 175), p1, p2, 2)
 
-                pygame.draw.line(screen, (105, 125, 175), (p1[0], p1[1] - 7), (p1[0], p1[1] + 7), 2)
-                pygame.draw.line(screen, (105, 125, 175), (p2[0], p2[1] - 7), (p2[0], p2[1] + 7), 2)
-                draw_text(screen, f"当前间距={format_sig3(right_surface - left_surface)} m",
+                pygame.draw.line(display.screen, (105, 125, 175), (p1[0], p1[1] - 7), (p1[0], p1[1] + 7), 2)
+                pygame.draw.line(display.screen, (105, 125, 175), (p2[0], p2[1] - 7), (p2[0], p2[1] + 7), 2)
+                draw_text(display.screen, f"当前间距={format_sig3(right_surface - left_surface)} m",
                           ((p1[0] + p2[0]) // 2, p1[1] + 10), FONT_SMALL, MUTED, anchor="midtop")
 
         if self.trail1:
-            trail_surf_1.fill((0, 0, 0, 0))
+            display.trail_surf_1.fill((0, 0, 0, 0))
             for i, x in enumerate(self.trail1):
                 p = i / max(1, len(self.trail1) - 1)
 
                 pos = w2s(x)
-                if -100 <= pos[0] <= WIDTH + 100:
+                if -100 <= pos[0] <= LAYOUT.width + 100:
                     r = max(2, int(radius_px * (0.12 + 0.26 * p)))
-                    pygame.draw.circle(trail_surf_1, (*BALL1_GLOW, int(10 + 70 * p)), pos, r + 3)
-                    pygame.draw.circle(trail_surf_1, (*BALL1_COLOR, int(10 + 70 * p)), pos, r)
-            screen.blit(trail_surf_1, (0, 0))
+                    pygame.draw.circle(display.trail_surf_1, (*BALL1_GLOW, int(10 + 70 * p)), pos, r + 3)
+                    pygame.draw.circle(display.trail_surf_1, (*BALL1_COLOR, int(10 + 70 * p)), pos, r)
+            display.screen.blit(display.trail_surf_1, (0, 0))
 
         if self.trail2:
-            trail_surf_2.fill((0, 0, 0, 0))
+            display.trail_surf_2.fill((0, 0, 0, 0))
 
             for i, x in enumerate(self.trail2):
                 p = i / max(1, len(self.trail2) - 1)
                 pos = w2s(x)
-                if -100 <= pos[0] <= WIDTH + 100:
+                if -100 <= pos[0] <= LAYOUT.width + 100:
                     r = max(2, int(radius_px * (0.12 + 0.26 * p)))
-                    pygame.draw.circle(trail_surf_2, (*BALL2_GLOW, int(10 + 70 * p)), pos, r + 3)
-                    pygame.draw.circle(trail_surf_2, (*BALL2_COLOR, int(10 + 70 * p)), pos, r)
+                    pygame.draw.circle(display.trail_surf_2, (*BALL2_GLOW, int(10 + 70 * p)), pos, r + 3)
+                    pygame.draw.circle(display.trail_surf_2, (*BALL2_COLOR, int(10 + 70 * p)), pos, r)
 
-            screen.blit(trail_surf_2, (0, 0))
+            display.screen.blit(display.trail_surf_2, (0, 0))
 
         if self.particles or self.shockwaves:
-            particle_surf.fill((0, 0, 0, 0))
+            display.particle_surf.fill((0, 0, 0, 0))
             for particle in self.particles:
-                particle.draw(particle_surf, w2s, streak_scale=5.5)
+                particle.draw(display.particle_surf, w2s, streak_scale=5.5)
             for wave in self.shockwaves:
-                wave.draw(particle_surf, w2s, scale)
-            screen.blit(particle_surf, (0, 0))
+                wave.draw(display.particle_surf, w2s, scale)
+            display.screen.blit(display.particle_surf, (0, 0))
 
 
         def draw_ball(pos, radius, base_color, edge_color, glow_color, label, mass):
             px, py = pos
-            pygame.draw.ellipse(screen, (0, 0, 0),
+            pygame.draw.ellipse(display.screen, (0, 0, 0),
                                 (px - radius - 6, platform_y - max(4, radius // 4),
                                  2 * radius + 12, max(8, radius // 2)))
-            glow_surf.fill((0, 0, 0, 0))
-            pygame.draw.circle(glow_surf, (*glow_color, 28), pos, radius + 20)
-            pygame.draw.circle(glow_surf, (*glow_color, 46), pos, radius + 11)
+            display.glow_surf.fill((0, 0, 0, 0))
+            pygame.draw.circle(display.glow_surf, (*glow_color, 28), pos, radius + 20)
+            pygame.draw.circle(display.glow_surf, (*glow_color, 46), pos, radius + 11)
 
-            screen.blit(glow_surf, (0, 0))
-            pygame.draw.circle(screen, (4, 10, 23), (px + 4, py + 5), radius + 2)
-            pygame.draw.circle(screen, base_color, pos, radius)
-            pygame.draw.circle(screen, lerp_color(base_color, (15, 55, 100), 0.35), pos, radius, 2)
-            pygame.draw.circle(screen, edge_color,
+            display.screen.blit(display.glow_surf, (0, 0))
+            pygame.draw.circle(display.screen, (4, 10, 23), (px + 4, py + 5), radius + 2)
+            pygame.draw.circle(display.screen, base_color, pos, radius)
+            pygame.draw.circle(display.screen, lerp_color(base_color, (15, 55, 100), 0.35), pos, radius, 2)
+            pygame.draw.circle(display.screen, edge_color,
                                (px - radius // 3, py - radius // 3), max(4, radius // 4))
 
-            pygame.draw.circle(screen, (255, 255, 255),
+            pygame.draw.circle(display.screen, (255, 255, 255),
                                (px - radius // 3 - 1, py - radius // 3 - 1), max(2, radius // 8))
-            draw_text(screen, label, (px, py - radius - 38), FONT_BIG, edge_color, anchor="midbottom")
-            draw_text(screen, f"m={format_sig3(mass)} kg", (px, py + radius + 18), FONT_SMALL, MUTED, anchor="midtop")
+            draw_text(display.screen, label, (px, py - radius - 38), FONT_BIG, edge_color, anchor="midbottom")
+            draw_text(display.screen, f"m={format_sig3(mass)} kg", (px, py + radius + 18), FONT_SMALL, MUTED, anchor="midtop")
 
         pos1, pos2 = w2s(self.x1), w2s(self.x2)
         draw_ball(pos1, radius_px, BALL1_COLOR, BALL1_EDGE, BALL1_GLOW, "球 1", m1)
@@ -317,7 +312,7 @@ class BallBallCollision(BaseModel):
 
         def draw_velocity(pos, velocity, label):
             if abs(velocity) < 0.01:
-                draw_text(screen, f"{label}=0", (pos[0], pos[1] - radius_px - 15),
+                draw_text(display.screen, f"{label}=0", (pos[0], pos[1] - radius_px - 15),
                           FONT_SMALL, GREEN, anchor="midbottom")
                 return
             direction = 1 if velocity > 0 else -1
@@ -325,8 +320,8 @@ class BallBallCollision(BaseModel):
             y = pos[1] - radius_px - 18
 
             finish = (int(pos[0] + direction * arrow_len), y)
-            draw_arrow(screen, (pos[0], y), finish, GREEN, 3)
-            draw_text(screen, f"{label}={format_sig3(velocity)} m/s",
+            draw_arrow(display.screen, (pos[0], y), finish, GREEN, 3)
+            draw_text(display.screen, f"{label}={format_sig3(velocity)} m/s",
                       (finish[0] + (10 if direction > 0 else -10), y - 12), FONT_SMALL, GREEN,
                       anchor="topleft" if direction > 0 else "topright")
 
@@ -336,15 +331,15 @@ class BallBallCollision(BaseModel):
 
         if self.flash > 0 and self.last_result:
             contact = w2s(self.last_result["contact_x"])
-            flash_surf.fill((0, 0, 0, 0))
+            display.flash_surf.fill((0, 0, 0, 0))
             f = self.flash
             r0 = int(clamp((1.15 - f) * 80 + 10, 5, 90))
             a0 = int(220 * f)
 
-            pygame.draw.circle(flash_surf, (255, 255, 255, a0), contact, r0)
-            pygame.draw.circle(flash_surf, (255, 210, 80, int(a0 * 0.45)), contact, r0 + int(30 * f))
-            pygame.draw.circle(flash_surf, (120, 180, 255, int(a0 * 0.20)), contact, r0 + int(55 * f))
-            screen.blit(flash_surf, (0, 0))
+            pygame.draw.circle(display.flash_surf, (255, 255, 255, a0), contact, r0)
+            pygame.draw.circle(display.flash_surf, (255, 210, 80, int(a0 * 0.45)), contact, r0 + int(30 * f))
+            pygame.draw.circle(display.flash_surf, (120, 180, 255, int(a0 * 0.20)), contact, r0 + int(55 * f))
+            display.screen.blit(display.flash_surf, (0, 0))
 
         p_now = m1 * self.v1 + m2 * self.v2
         ke1 = 0.5 * m1 * self.v1 * self.v1

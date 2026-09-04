@@ -8,14 +8,9 @@ from dataclasses import dataclass
 import pygame
 
 from config import (ACCENT, ACCENT_2, ACCENT_3, BALL1_COLOR, BALL1_EDGE,
-                    BALL1_GLOW, BASE_Y, BOTTOM_FORMULA_H, BOTTOM_FORMULA_Y,
-                    GREEN, INPUT_W, MUTED, PLATFORM, PLATFORM_TOP,
-                    RIGHT_INPUT_X, ROD_COLOR, ROD_EDGE, ROD_GLOW, ROW, SIM_H,
-                    WIDTH, ANALYSIS_H, ANALYSIS_W, ANALYSIS_X, ANALYSIS_Y,
-                    CONTROLS_X, CONTROLS_W, TEXT, SCENE_X, SCENE_W, LAYOUT,
-                    SCENE_Y, SCENE_H)
-from core.display import (STATIC_BG, flash_surf, glow_surf, particle_surf,
-                          screen, trail_surf_1, trail_surf_2)
+                    BALL1_GLOW, GREEN, MUTED, PLATFORM, PLATFORM_TOP,
+                    ROD_COLOR, ROD_EDGE, ROD_GLOW, TEXT, LAYOUT)
+from core import display
 from core.fonts import FONT_BIG, FONT_SMALL, FONT_TINY
 from effects.particles import spawn_impact_particles
 from models.base import BaseModel
@@ -78,10 +73,15 @@ class BallHitsRod(BaseModel):
         # h 仍然保留精确输入，但滑块用 h/L 表示，便于同时调整 L 和碰撞位置。
         self.input_boxes.pop("height_ratio")
         self.input_boxes["h"] = InputBox(
-            "h", "精确输入", RIGHT_INPUT_X,
-            BASE_Y + self.control_row_height - 8,
-            INPUT_W, self.current_h(), "m"
+            "h", "精确输入", 0, 0, 84, self.current_h(), "m"
         )
+
+    def layout_controls(self):
+        super().layout_controls()
+        # h 精确输入框占据 height_ratio 行的“数值”列。
+        anchor = self.sliders["height_ratio"]
+        self.input_boxes["h"].set_rect(
+            anchor.x + anchor.w + 14, anchor.y - 8, 84)
 
     def current_h(self):
         return self.sliders["height_ratio"].value * self.sliders["L"].value
@@ -850,12 +850,12 @@ class BallHitsRod(BaseModel):
     def draw_slider_value(self, key, slider):
         if key == "height_ratio":
             slider.draw(
-                screen,
+                display.screen,
                 f"h = {format_sig3(self.current_h())} m  ({format_sig3(slider.value)}L)",
                 show_value=False,
             )
         else:
-            slider.draw(screen, show_value=False)
+            slider.draw(display.screen, show_value=False)
 
     def draw_scene(self):
         m = self.sliders["m"].value
@@ -870,10 +870,10 @@ class BallHitsRod(BaseModel):
         old_scale = min(
             145.0,
             395.0 / equivalent_old_L,
-            (SCENE_H - 82) / (equivalent_old_L + 0.35),
+            (LAYOUT.scene_h - 82) / (equivalent_old_L + 0.35),
         )
         scale = physical_scale_ratio * old_scale
-        pivot = (SCENE_X + int(SCENE_W * 0.63), SCENE_Y + int(SCENE_H * 0.30))
+        pivot = (LAYOUT.scene_x + int(LAYOUT.scene_w * 0.63), LAYOUT.scene_y + int(LAYOUT.scene_h * 0.30))
 
         explainer = (
             self.impact_explainer
@@ -928,7 +928,7 @@ class BallHitsRod(BaseModel):
         zoom = self.camera_zoom if explainer is not None else 1.0
         if zoom > 1.0 and self.camera_focus is not None:
             focus_x, focus_y = self.camera_focus
-            focus_screen = (pivot[0], SCENE_Y + int(SCENE_H * 0.88))
+            focus_screen = (pivot[0], LAYOUT.scene_y + int(LAYOUT.scene_h * 0.88))
 
             def w2s(x, y):
                 return (
@@ -942,7 +942,7 @@ class BallHitsRod(BaseModel):
 
         scene_pivot = w2s(0.0, 0.0)
 
-        screen.blit(STATIC_BG, (0, 0))
+        display.screen.blit(display.STATIC_BG, (0, 0))
         display_state = {
             "ready": "待开始",
             "swinging": "碰撞前回放" if replay_active else (
@@ -954,26 +954,26 @@ class BallHitsRod(BaseModel):
         platform_y = h + rb
         sx1, sy = w2s(min(-1.5 * L, display_ball_x - 0.8 * L), platform_y)
         sx2, _ = w2s(1.25 * L, platform_y)
-        sx1, sx2 = max(-80, sx1), min(WIDTH + 80, sx2)
-        pygame.draw.line(screen, (22, 28, 48), (sx1, sy + 10), (sx2, sy + 10), 10)
-        pygame.draw.line(screen, (35, 44, 70), (sx1, sy + 4), (sx2, sy + 4), 8)
-        pygame.draw.line(screen, PLATFORM, (sx1, sy), (sx2, sy), 5)
-        pygame.draw.line(screen, PLATFORM_TOP, (sx1, sy - 1), (sx2, sy - 1), 2)
-        for tx in range(max(-40, sx1), min(WIDTH + 40, sx2), 18):
-            pygame.draw.line(screen, (100, 115, 155), (tx, sy), (tx + 6, sy + 4), 1)
+        sx1, sx2 = max(-80, sx1), min(LAYOUT.width + 80, sx2)
+        pygame.draw.line(display.screen, (22, 28, 48), (sx1, sy + 10), (sx2, sy + 10), 10)
+        pygame.draw.line(display.screen, (35, 44, 70), (sx1, sy + 4), (sx2, sy + 4), 8)
+        pygame.draw.line(display.screen, PLATFORM, (sx1, sy), (sx2, sy), 5)
+        pygame.draw.line(display.screen, PLATFORM_TOP, (sx1, sy - 1), (sx2, sy - 1), 2)
+        for tx in range(max(-40, sx1), min(LAYOUT.width + 40, sx2), 18):
+            pygame.draw.line(display.screen, (100, 115, 155), (tx, sy), (tx + 6, sy + 4), 1)
 
         # 竖直参考线和碰撞高度标记。
         ref_x, ref_y = w2s(0.0, L)
         for y in range(scene_pivot[1] + 4, ref_y, 12):
-            pygame.draw.line(screen, (80, 105, 150), (scene_pivot[0], y),
+            pygame.draw.line(display.screen, (80, 105, 150), (scene_pivot[0], y),
                              (scene_pivot[0], min(y + 6, ref_y)), 1)
         hx, hy = w2s(-0.36 * L, h)
-        pygame.draw.line(screen, (100, 120, 165), (hx, scene_pivot[1]), (hx, hy), 2)
-        pygame.draw.line(screen, (100, 120, 165), (hx - 9, scene_pivot[1]), (hx + 9, scene_pivot[1]), 2)
-        pygame.draw.line(screen, (100, 120, 165), (hx - 9, hy), (hx + 9, hy), 2)
-        draw_text(screen, f"h={format_sig3(h)}m", (hx - 10, (scene_pivot[1] + hy) // 2),
+        pygame.draw.line(display.screen, (100, 120, 165), (hx, scene_pivot[1]), (hx, hy), 2)
+        pygame.draw.line(display.screen, (100, 120, 165), (hx - 9, scene_pivot[1]), (hx + 9, scene_pivot[1]), 2)
+        pygame.draw.line(display.screen, (100, 120, 165), (hx - 9, hy), (hx + 9, hy), 2)
+        draw_text(display.screen, f"h={format_sig3(h)}m", (hx - 10, (scene_pivot[1] + hy) // 2),
                   FONT_SMALL, MUTED, anchor="midright")
-        draw_text(screen, "竖直碰撞位置", (scene_pivot[0] + 12, ref_y - 20), FONT_SMALL, MUTED)
+        draw_text(display.screen, "竖直碰撞位置", (scene_pivot[0] + 12, ref_y - 20), FONT_SMALL, MUTED)
 
         # 摆角弧线以转轴为圆心，显示竖直向下方向与细杆之间的夹角。
         if not display_collided and 0.0 <= display_theta <= math.pi / 2.0:
@@ -982,7 +982,7 @@ class BallHitsRod(BaseModel):
                              scene_pivot[0] - arc_radius, scene_pivot[1] - arc_radius,
                 2 * arc_radius, 2 * arc_radius,
             )
-            pygame.draw.arc(screen, ACCENT_2, arc_rect,
+            pygame.draw.arc(display.screen, ACCENT_2, arc_rect,
                             math.pi + display_theta, 1.5 * math.pi, 2)
             bisector = 1.25 * math.pi + 0.5 * display_theta
             label_radius = arc_radius + 18
@@ -991,7 +991,7 @@ class BallHitsRod(BaseModel):
                 scene_pivot[1] - int(label_radius * math.sin(bisector)),
             )
             draw_text(
-                screen,
+                display.screen,
                 f"ψ={format_sig3(math.degrees(math.pi / 2 - display_theta))}°",
                 label_pos, FONT_SMALL, ACCENT_2, anchor="center",
             )
@@ -1021,7 +1021,7 @@ class BallHitsRod(BaseModel):
 
         rod_w = max(5, int(0.028 * scale))
         if display_rod_trail:
-            trail_surf_1.fill((0, 0, 0, 0))
+            display.trail_surf_1.fill((0, 0, 0, 0))
             for point in display_rod_trail:
                 life = clamp(1.0 - point.age / self.TRAIL_LIFETIME, 0.0, 1.0)
                 if life <= 0.0:
@@ -1029,47 +1029,47 @@ class BallHitsRod(BaseModel):
                 end = w2s(-L * math.cos(point.theta), L * math.sin(point.theta))
                 alpha = int(80.0 * life)
                 pygame.draw.line(
-                    trail_surf_1, (*ROD_GLOW, alpha), scene_pivot, end,
+                    display.trail_surf_1, (*ROD_GLOW, alpha), scene_pivot, end,
                     max(2, int(rod_w * (0.35 + 0.65 * life))),
                 )
-            screen.blit(trail_surf_1, (0, 0))
+            display.screen.blit(display.trail_surf_1, (0, 0))
 
         end = w2s(-L * math.cos(display_theta), L * math.sin(display_theta))
-        glow_surf.fill((0, 0, 0, 0))
-        pygame.draw.line(glow_surf, (*ROD_GLOW, 35), scene_pivot, end, rod_w + 12)
-        pygame.draw.line(glow_surf, (*ROD_GLOW, 60), scene_pivot, end, rod_w + 5)
-        screen.blit(glow_surf, (0, 0))
-        pygame.draw.line(screen, (0, 0, 0), (scene_pivot[0] + 5, scene_pivot[1] + 7),
+        display.glow_surf.fill((0, 0, 0, 0))
+        pygame.draw.line(display.glow_surf, (*ROD_GLOW, 35), scene_pivot, end, rod_w + 12)
+        pygame.draw.line(display.glow_surf, (*ROD_GLOW, 60), scene_pivot, end, rod_w + 5)
+        display.screen.blit(display.glow_surf, (0, 0))
+        pygame.draw.line(display.screen, (0, 0, 0), (scene_pivot[0] + 5, scene_pivot[1] + 7),
                          (end[0] + 5, end[1] + 7), rod_w + 4)
-        pygame.draw.line(screen, ROD_COLOR, scene_pivot, end, rod_w)
-        pygame.draw.line(screen, ROD_EDGE, scene_pivot, end, max(2, rod_w // 4))
-        pygame.draw.circle(screen, (160, 110, 30), end, rod_w // 2 + 3)
-        pygame.draw.circle(screen, ROD_EDGE, end, max(3, rod_w // 4))
+        pygame.draw.line(display.screen, ROD_COLOR, scene_pivot, end, rod_w)
+        pygame.draw.line(display.screen, ROD_EDGE, scene_pivot, end, max(2, rod_w // 4))
+        pygame.draw.circle(display.screen, (160, 110, 30), end, rod_w // 2 + 3)
+        pygame.draw.circle(display.screen, ROD_EDGE, end, max(3, rod_w // 4))
 
         px, py = scene_pivot
-        pygame.draw.rect(screen, (38, 48, 76), (px - 24, py - 38, 14, 76), border_radius=5)
-        pygame.draw.circle(screen, (5, 8, 18), (px + 3, py + 4), 26)
-        pygame.draw.circle(screen, (50, 62, 95), scene_pivot, 24)
-        pygame.draw.circle(screen, (28, 38, 64), scene_pivot, 20)
-        pygame.draw.circle(screen, (65, 82, 128), scene_pivot, 16)
-        pygame.draw.circle(screen, ACCENT, scene_pivot, 6)
-        pygame.draw.circle(screen, (210, 240, 255), scene_pivot, 3)
+        pygame.draw.rect(display.screen, (38, 48, 76), (px - 24, py - 38, 14, 76), border_radius=5)
+        pygame.draw.circle(display.screen, (5, 8, 18), (px + 3, py + 4), 26)
+        pygame.draw.circle(display.screen, (50, 62, 95), scene_pivot, 24)
+        pygame.draw.circle(display.screen, (28, 38, 64), scene_pivot, 20)
+        pygame.draw.circle(display.screen, (65, 82, 128), scene_pivot, 16)
+        pygame.draw.circle(display.screen, ACCENT, scene_pivot, 6)
+        pygame.draw.circle(display.screen, (210, 240, 255), scene_pivot, 3)
 
         w_rect = pygame.Rect(px + 32, py - 30, 210, 34)
-        rounded_rect(screen, w_rect, (12, 20, 38), 9, 1, (70, 95, 145))
-        draw_text(screen, f"w = {format_sig3(display_omega)} rad/s", w_rect.center,
+        rounded_rect(display.screen, w_rect, (12, 20, 38), 9, 1, (70, 95, 145))
+        draw_text(display.screen, f"w = {format_sig3(display_omega)} rad/s", w_rect.center,
                   FONT_SMALL, ACCENT_3, anchor="center")
 
         cpx, cpy = w2s(-h * math.cos(display_theta), h * math.sin(display_theta))
-        pygame.draw.circle(screen, ACCENT_2, (cpx, cpy), 9, 2)
-        pygame.draw.circle(screen, (255, 255, 255), (cpx, cpy), 4)
+        pygame.draw.circle(display.screen, ACCENT_2, (cpx, cpy), 9, 2)
+        pygame.draw.circle(display.screen, (255, 255, 255), (cpx, cpy), 4)
 
         if explainer and explainer.phase in ("velocity", "momentum"):
             tangent_len = clamp(abs(display_contact_speed) * scale * 0.07, 18, 105)
             tangent_direction = 1 if display_contact_speed >= 0 else -1
             tangent_end = (cpx + int(tangent_direction * tangent_len), cpy)
-            draw_arrow(screen, (cpx, cpy), tangent_end, ACCENT_2, 3)
-            draw_text(screen, f"hω={format_sig3(display_contact_speed)} m/s",
+            draw_arrow(display.screen, (cpx, cpy), tangent_end, ACCENT_2, 3)
+            draw_text(display.screen, f"hω={format_sig3(display_contact_speed)} m/s",
                       (tangent_end[0] + (7 if tangent_direction > 0 else -7), cpy + 8),
                       FONT_SMALL, ACCENT_2,
                       anchor="topleft" if tangent_direction > 0 else "topright")
@@ -1079,8 +1079,8 @@ class BallHitsRod(BaseModel):
             impulse_len = clamp(abs(impulse) * scale * 0.11, 8, 135)
             impulse_direction = 1 if impulse >= 0 else -1
             impulse_end = (cpx + int(impulse_direction * impulse_len), cpy)
-            draw_arrow(screen, (cpx, cpy), impulse_end, ACCENT_2, 4)
-            draw_text(screen, f"J={format_sig3(impulse)} N*s",
+            draw_arrow(display.screen, (cpx, cpy), impulse_end, ACCENT_2, 4)
+            draw_text(display.screen, f"J={format_sig3(impulse)} N*s",
                       (impulse_end[0] + (8 if impulse_direction > 0 else -8), cpy - 18),
                       FONT_SMALL, ACCENT_2,
                       anchor="topleft" if impulse_direction > 0 else "topright")
@@ -1094,79 +1094,79 @@ class BallHitsRod(BaseModel):
             )
             heat_radius = int(12 + 42 * loss_ratio * explainer.energy_progress)
             if heat_radius > 12:
-                flash_surf.fill((0, 0, 0, 0))
-                pygame.draw.circle(flash_surf, (255, 90, 45, 55), (cpx, cpy), heat_radius)
-                pygame.draw.circle(flash_surf, (255, 210, 80, 100),
+                display.flash_surf.fill((0, 0, 0, 0))
+                pygame.draw.circle(display.flash_surf, (255, 90, 45, 55), (cpx, cpy), heat_radius)
+                pygame.draw.circle(display.flash_surf, (255, 210, 80, 100),
                                    (cpx, cpy), max(5, heat_radius // 3))
-                screen.blit(flash_surf, (0, 0))
+                display.screen.blit(display.flash_surf, (0, 0))
 
         # 重力方向示意箭头。
         gx, gy = w2s(-0.5 * L * math.cos(display_theta),
                      0.5 * L * math.sin(display_theta))
-        draw_arrow(screen, (gx, gy), (gx, gy + int(0.20 * scale)), ACCENT_3, 2)
+        draw_arrow(display.screen, (gx, gy), (gx, gy + int(0.20 * scale)), ACCENT_3, 2)
 
         if display_ball_trail:
-            trail_surf_2.fill((0, 0, 0, 0))
+            display.trail_surf_2.fill((0, 0, 0, 0))
             for i, (bx, by) in enumerate(display_ball_trail):
                 p = i / max(1, len(display_ball_trail) - 1)
                 pos = w2s(bx, by)
-                if -100 <= pos[0] <= WIDTH + 100:
+                if -100 <= pos[0] <= LAYOUT.width + 100:
                     r = max(2, int(rb * scale * (0.22 + 0.40 * p)))
-                    pygame.draw.circle(trail_surf_2, (*BALL1_GLOW, int(12 + 75 * p)), pos, r + 3)
-            screen.blit(trail_surf_2, (0, 0))
+                    pygame.draw.circle(display.trail_surf_2, (*BALL1_GLOW, int(12 + 75 * p)), pos, r + 3)
+            display.screen.blit(display.trail_surf_2, (0, 0))
 
         if not replay_active and (self.particles or self.shockwaves):
-            particle_surf.fill((0, 0, 0, 0))
+            display.particle_surf.fill((0, 0, 0, 0))
             for particle in self.particles:
-                particle.draw(particle_surf, w2s, streak_scale=scale * 0.08)
+                particle.draw(display.particle_surf, w2s, streak_scale=scale * 0.08)
             for wave in self.shockwaves:
-                wave.draw(particle_surf, w2s, scale)
-            screen.blit(particle_surf, (0, 0))
+                wave.draw(display.particle_surf, w2s, scale)
+            display.screen.blit(display.particle_surf, (0, 0))
 
         ball_pos = w2s(display_ball_x, h)
         br = max(12, int(rb * scale))
-        pygame.draw.ellipse(screen, (0, 0, 0),
+        pygame.draw.ellipse(display.screen, (0, 0, 0),
                             (ball_pos[0] - br - 4, sy - max(3, br // 4),
                              2 * br + 8, max(6, br // 2)))
-        glow_surf.fill((0, 0, 0, 0))
-        pygame.draw.circle(glow_surf, (*BALL1_GLOW, 28), ball_pos, br + 20)
-        pygame.draw.circle(glow_surf, (*BALL1_GLOW, 45), ball_pos, br + 12)
-        screen.blit(glow_surf, (0, 0))
-        pygame.draw.circle(screen, (4, 10, 23), (ball_pos[0] + 4, ball_pos[1] + 5), br + 2)
-        pygame.draw.circle(screen, BALL1_COLOR, ball_pos, br)
-        pygame.draw.circle(screen, (31, 125, 190), ball_pos, br, 2)
-        pygame.draw.circle(screen, BALL1_EDGE,
+        display.glow_surf.fill((0, 0, 0, 0))
+        pygame.draw.circle(display.glow_surf, (*BALL1_GLOW, 28), ball_pos, br + 20)
+        pygame.draw.circle(display.glow_surf, (*BALL1_GLOW, 45), ball_pos, br + 12)
+        display.screen.blit(display.glow_surf, (0, 0))
+        pygame.draw.circle(display.screen, (4, 10, 23), (ball_pos[0] + 4, ball_pos[1] + 5), br + 2)
+        pygame.draw.circle(display.screen, BALL1_COLOR, ball_pos, br)
+        pygame.draw.circle(display.screen, (31, 125, 190), ball_pos, br, 2)
+        pygame.draw.circle(display.screen, BALL1_EDGE,
                            (ball_pos[0] - br // 3, ball_pos[1] - br // 3), max(3, br // 4))
-        pygame.draw.circle(screen, (255, 255, 255),
+        pygame.draw.circle(display.screen, (255, 255, 255),
                            (ball_pos[0] - br // 3 - 1, ball_pos[1] - br // 3 - 1),
                            max(2, br // 7))
 
         if not replay_active and self.flash > 0:
             contact = w2s(0.0, h)
-            flash_surf.fill((0, 0, 0, 0))
+            display.flash_surf.fill((0, 0, 0, 0))
             f = self.flash
             r0 = int(clamp((1.15 - f) * 80 + 10, 5, 90))
             a0 = int(220 * f)
-            pygame.draw.circle(flash_surf, (255, 255, 255, a0), contact, r0)
-            pygame.draw.circle(flash_surf, (255, 210, 80, int(a0 * 0.45)),
+            pygame.draw.circle(display.flash_surf, (255, 255, 255, a0), contact, r0)
+            pygame.draw.circle(display.flash_surf, (255, 210, 80, int(a0 * 0.45)),
                                contact, r0 + int(30 * f))
-            pygame.draw.circle(flash_surf, (120, 180, 255, int(a0 * 0.20)),
+            pygame.draw.circle(display.flash_surf, (120, 180, 255, int(a0 * 0.20)),
                                contact, r0 + int(55 * f))
-            screen.blit(flash_surf, (0, 0))
+            display.screen.blit(display.flash_surf, (0, 0))
 
         if replay_active and display_collision is not None:
             draw_impact_fx(
-                screen, (cpx, cpy), replay_frame.impact_flash,
+                display.screen, (cpx, cpy), replay_frame.impact_flash,
                 replay_frame.impact_strength,
             )
         if replay_active:
             draw_friction_heat_fx(
-                screen, scene_pivot, replay_frame.friction_energy,
+                display.screen, scene_pivot, replay_frame.friction_energy,
                 scale=0.85,
             )
         elif self.phase == "after":
             draw_friction_heat_fx(
-                screen, scene_pivot, self.damping_energy,
+                display.screen, scene_pivot, self.damping_energy,
                 scale=0.85,
             )
 
@@ -1175,13 +1175,13 @@ class BallHitsRod(BaseModel):
             direction = 1 if display_ball_v > 0 else -1
             ay = ball_pos[1] - br - 12
             finish = (int(ball_pos[0] + direction * arrow_len), ay)
-            draw_arrow(screen, (ball_pos[0], ay), finish, GREEN, 3)
-            draw_text(screen, f"v={format_sig3(display_ball_v)} m/s",
+            draw_arrow(display.screen, (ball_pos[0], ay), finish, GREEN, 3)
+            draw_text(display.screen, f"v={format_sig3(display_ball_v)} m/s",
                       (finish[0] + (10 if direction > 0 else -10), ay - 12), FONT_SMALL,
                       GREEN, anchor="topleft" if direction > 0 else "topright")
         elif not display_collided:
-            draw_text(screen, "小球静止等待碰撞",
-                      (SCENE_X + 20, SCENE_Y + SCENE_H - 28),
+            draw_text(display.screen, "小球静止等待碰撞",
+                      (LAYOUT.scene_x + 20, LAYOUT.scene_y + LAYOUT.scene_h - 28),
                       FONT_SMALL, ACCENT_3)
 
         if explainer:
@@ -1254,21 +1254,19 @@ class BallHitsRod(BaseModel):
             ("目标碰撞点速率", "恢复系数", "碰后绕轴总角动量", "角动量误差", "碰撞账本残差")
         )
 
-    def draw_analysis_panel(self):
-        """在底部分析区显示讲解过程或确定性的能量流。"""
-        rect = pygame.Rect(ANALYSIS_X, ANALYSIS_Y, ANALYSIS_W, ANALYSIS_H)
+    def draw_analysis_panel(self, rect):
+        """在回放面板内显示讲解过程或确定性的能量流。"""
+        rect = pygame.Rect(rect)
         explainer = getattr(self, "_analysis_explainer", None)
         if explainer is not None:
-            explainer.draw(screen, rect)
+            explainer.draw(display.screen, rect)
             return
         if getattr(self, "_analysis_show_energy", False):
-            draw_energy_flow(screen, rect, self._analysis_account)
+            draw_energy_flow(display.screen, rect, self._analysis_account)
             return
 
-        rounded_rect(screen, rect, (8, 13, 29), 14, 1, (70, 95, 145))
-        draw_text(screen, "碰撞分析", (rect.x + 14, rect.y + 10), FONT_BIG, TEXT)
-        draw_text(screen, "角动量分量（数值为有符号量）",
-                  (rect.x + 14, rect.y + 43), FONT_TINY, MUTED)
+        draw_text(display.screen, "角动量分量（数值为有符号量）",
+                  (rect.x + 2, rect.y + 2), FONT_TINY, MUTED)
         rod_l, ball_l, total_l = getattr(
             self, "_analysis_angular_momentum", (0.0, 0.0, 0.0)
         )
@@ -1279,17 +1277,17 @@ class BallHitsRod(BaseModel):
         zero_x = x + width // 2
         for index, (label, value, color) in enumerate(values):
             y = rect.y + 76 + index * 38
-            draw_text(screen, label, (rect.x + 14, y), FONT_TINY, TEXT)
-            pygame.draw.rect(screen, (30, 43, 72), (x, y + 2, width, 12), border_radius=5)
-            pygame.draw.line(screen, (220, 230, 250), (zero_x, y),
+            draw_text(display.screen, label, (rect.x + 14, y), FONT_TINY, TEXT)
+            pygame.draw.rect(display.screen, (30, 43, 72), (x, y + 2, width, 12), border_radius=5)
+            pygame.draw.line(display.screen, (220, 230, 250), (zero_x, y),
                              (zero_x, y + 16), 1)
             bar = int((width // 2 - 5) * clamp(abs(value) / max_value, 0.0, 1.0))
             if bar:
                 bar_rect = (zero_x, y + 2, bar, 12) if value >= 0 else (
                     zero_x - bar, y + 2, bar, 12
                 )
-                pygame.draw.rect(screen, color, bar_rect, border_radius=5)
-            draw_text(screen, format_sig3(value), (rect.right - 14, y - 1),
+                pygame.draw.rect(display.screen, color, bar_rect, border_radius=5)
+            draw_text(display.screen, format_sig3(value), (rect.right - 14, y - 1),
                       FONT_TINY, color, anchor="topright")
-        draw_text(screen, f"总角动量 = {format_sig3(total_l)} kg*m^2/s",
+        draw_text(display.screen, f"总角动量 = {format_sig3(total_l)} kg*m^2/s",
                   (rect.x + 14, rect.bottom - 28), FONT_SMALL, ACCENT_3)
