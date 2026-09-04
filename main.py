@@ -6,7 +6,7 @@ import sys
 
 import pygame
 
-from config import (BOTTOM_ACTION_H, BOTTOM_ACTION_Y, CONTROLS_X, FPS, TAB_Y)
+from config import FPS, LAYOUT
 from core.display import clock, screen
 from models.ball_ball import BallBallCollision
 from models.ball_rod import BallHitsRod
@@ -19,20 +19,22 @@ class App:
             model.app = self
         self.mode_index = 0
 
+        action = pygame.Rect(LAYOUT.action)
         self.btn_start = Button(
-            "开始 / 暂停  Space", pygame.Rect(CONTROLS_X + 16, BOTTOM_ACTION_Y, 170,
-                                               BOTTOM_ACTION_H)
+            "开始 / 暂停",
+            pygame.Rect(action.x, action.y, min(145, action.w), action.h),
         )
         self.btn_reset = Button(
-            "重置  R", pygame.Rect(CONTROLS_X + 194, BOTTOM_ACTION_Y, 96, BOTTOM_ACTION_H)
+            "重置",
+            pygame.Rect(action.x + 153, action.y, 74, action.h),
         )
         self.btn_snap = Button(
-            "直接到碰撞  C", pygame.Rect(CONTROLS_X + 306, BOTTOM_ACTION_Y, 150,
-                                           BOTTOM_ACTION_H)
+            "直接到碰撞",
+            pygame.Rect(action.x + 235, action.y, min(124, max(80, action.w - 235)), action.h),
         )
         self.mode_buttons = [
-            Button("1  双球一维碰撞仿真", pygame.Rect(24, TAB_Y, 280, 32)),
-            Button("2  质点‑定轴细杆碰撞仿真", pygame.Rect(316, TAB_Y, 280, 32)),
+            Button("1  双球一维碰撞仿真", pygame.Rect(LAYOUT.tabs[0], LAYOUT.tabs[1], 238, LAYOUT.tabs[3])),
+            Button("2  质点‑定轴细杆碰撞仿真", pygame.Rect(LAYOUT.tabs[0] + 248, LAYOUT.tabs[1], 238, LAYOUT.tabs[3])),
         ]
 
     @property
@@ -137,7 +139,7 @@ class App:
 
             model.step(dt)
             model.draw_scene()
-            model.draw_ui()
+            model.draw_interface()
             pygame.display.flip()
 
         pygame.quit()

@@ -70,7 +70,7 @@ class Slider:
 
         return changed
 
-    def draw(self, surface, value_text=None):
+    def draw(self, surface, value_text=None, show_value=True):
         surface.blit(self._static_track, (self.x, self.y - 8))
         kx = self.knob_x()
         if kx > self.x:
@@ -86,8 +86,9 @@ class Slider:
         draw_text(surface, self.label, (self.x, self.y - 30), FONT_SMALL, MUTED)
         if value_text is None:
             value_text = f"{format_sig3(self.value)}{self.unit}"
-        draw_text(surface, value_text, (self.x + self.w, self.y - 30),
-                  FONT_SMALL, TEXT, anchor="topright")
+        if show_value:
+            draw_text(surface, value_text, (self.x + self.w, self.y - 30),
+                      FONT_SMALL, TEXT, anchor="topright")
 
 
 class TimelineSlider:

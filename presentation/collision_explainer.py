@@ -74,6 +74,20 @@ class CollisionExplainer:
         self.snapshot = snapshot
         self.elapsed = 0.0
         self.total_duration = self.PHASE_DURATION * len(self.PHASES)
+        # Bar scales are presentation state, not per-frame measurements.  A
+        # fixed denominator prevents the apparent bar length from jumping when
+        # the interpolated value crosses a local maximum.
+        self.L_scale = max(
+            abs(snapshot.total_L_before),
+            abs(snapshot.total_L_after),
+            1e-6,
+        )
+        self.rod_L_scale = max(
+            abs(snapshot.rod_L_before), abs(snapshot.rod_L_after), 1e-6
+        )
+        self.ball_L_scale = max(
+            abs(snapshot.ball_MRV_before), abs(snapshot.ball_MRV_after), 1e-6
+        )
 
     @property
     def complete(self):
@@ -237,25 +251,26 @@ class CollisionExplainer:
         p = self.momentum_progress
         rod_l = self.rod_L_display()
         ball_l = self.ball_MRV_display()
-        total_scale = max(abs(s.total_L_before), abs(s.total_L_after), 1e-9)
-        rod_scale = max(abs(s.rod_L_before), abs(s.rod_L_after), 1e-9)
-        ball_scale = max(abs(s.ball_MRV_before), abs(s.ball_MRV_after), 1e-9)
         bar_w = rect.w - 220
         x = rect.x + 185
 
         draw_text(surface, "绕转轴角动量在杆与小球之间重新分配；总量不凭空改变",
                   (rect.x + 20, rect.y + 57), FONT_SMALL, MUTED)
-        draw_text(surface, "总角动量守恒  L杆 + L球",
+        draw_text(surface, "总角动量守恒",
                   (rect.x + 20, rect.y + 78), FONT_TINY, TEXT)
-        self._draw_signed_bar(
-            surface, x, rect.y + 81, bar_w, s.total_L_before, total_scale, ACCENT_3, 10
-        )
-        draw_text(surface, f"{format_sig3(s.total_L_before)} kg*m^2/s",
-                  (rect.right - 20, rect.y + 77), FONT_TINY, ACCENT_3, anchor="topright")
+        draw_text(surface, f"L_before = {format_sig3(s.total_L_before)} kg*m^2/s",
+                  (rect.x + 20, rect.y + 94), FONT_TINY, MUTED)
+        draw_text(surface, f"L_after  = {format_sig3(s.total_L_after)} kg*m^2/s",
+                  (rect.x + 20, rect.y + 110), FONT_TINY, MUTED)
+        error = abs(s.total_L_after - s.total_L_before)
+        error_percent = 100.0 * error / self.L_scale
+        status_color = ACCENT_3 if error_percent < 1e-6 else ACCENT_2
+        draw_text(surface, f"误差 = {error_percent:.5f}%  {'✓' if error_percent < 1e-6 else '!'}",
+                  (rect.x + 20, rect.y + 126), FONT_TINY, status_color)
 
-        rows = (("杆 Iω", rod_l, rod_scale, ACCENT_2),
-                ("球 m h v", ball_l, ball_scale, ACCENT_3))
-        y = rect.y + 111
+        rows = (("杆 Iω", rod_l, self.rod_L_scale, ACCENT_2),
+                ("球 m h v", ball_l, self.ball_L_scale, ACCENT_3))
+        y = rect.y + 157
         for label, value, scale, color in rows:
             draw_text(surface, label, (rect.x + 20, y), FONT_TINY, TEXT)
             self._draw_signed_bar(surface, x, y + 2, bar_w, value, scale, color, 11)
@@ -264,10 +279,10 @@ class CollisionExplainer:
             y += 29
 
         draw_text(surface, "← 负方向       零点       正方向 →",
-                  (x + bar_w / 2, rect.y + 166), FONT_TINY, MUTED, anchor="midtop")
+                  (x + bar_w / 2, rect.y + 217), FONT_TINY, MUTED, anchor="midtop")
 
-        transfer_start = (x + int(bar_w * 0.30), rect.y + 176)
-        transfer_end = (x + int(bar_w * 0.70), rect.y + 176)
+        transfer_start = (x + int(bar_w * 0.30), rect.y + 232)
+        transfer_end = (x + int(bar_w * 0.70), rect.y + 232)
         _draw_dashed_line(surface, transfer_start, transfer_end, ACCENT_2,
                           2, offset=self.elapsed * 42.0)
         _flow_dot(surface, transfer_start, transfer_end, p, ACCENT_2, radius=4)
@@ -373,11 +388,13 @@ class CollisionExplainer:
         draw_text(surface, "碰撞过程重演", (rect.x + 18, rect.y + 12), FONT_BIG, TEXT)
         draw_text(surface, "Space 跳过本次讲解", (rect.right - 18, rect.y + 18),
                   FONT_SMALL, ACCENT_2, anchor="topright")
-        labels = ("① 速度交换", "② 角动量分配", "③ 能量分流")
+        labels = ("① 速度交换", "② 角动量", "③ 能量流")
         for index, label in enumerate(labels):
             color = ACCENT_3 if index == self.phase_index else MUTED
-            draw_text(surface, label, (rect.x + 190 + index * 125, rect.y + 20),
-                      FONT_SMALL, color)
+            card_x = rect.x + 176 + index * 80
+            card = pygame.Rect(card_x, rect.y + 10, 76, 27)
+            rounded_rect(surface, card, (24, 35, 62), 7, 1, color)
+            draw_text(surface, label, card.center, FONT_TINY, color, anchor="center")
         pygame.draw.rect(surface, (30, 43, 72),
                          (rect.x + 18, rect.y + 43, rect.w - 36, 4), border_radius=2)
         progress_w = int((rect.w - 36) * clamp(self.elapsed / self.total_duration, 0.0, 1.0))

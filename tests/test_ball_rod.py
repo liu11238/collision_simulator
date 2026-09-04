@@ -199,6 +199,18 @@ class BallRodTest(unittest.TestCase):
         self.assertEqual(model.replay_frame().event, "collision_after" if
                          model.replay.duration == 0.0 else None)
 
+    def test_rod_trail_has_age_and_fades_after_motion_stops(self):
+        model = self.make_model(vc=3.0, h=0.72, e=0.6)
+        model.explain_enabled = False
+        model.jump_to_collision()
+        model.step(1.0 / 60.0)
+        self.assertTrue(model.rod_trail)
+        self.assertTrue(all(hasattr(point, "age") for point in model.rod_trail))
+        model.running = False
+        for _ in range(60):
+            model.step(model.TRAIL_LIFETIME / 60.0)
+        self.assertFalse(model.rod_trail)
+
 
 if __name__ == "__main__":
     unittest.main()

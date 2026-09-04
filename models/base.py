@@ -10,8 +10,8 @@ from config import (ACCENT, ACCENT_2, ACCENT_3, BASE_Y, BOTTOM_ACTION_Y,
                     CONTROLS_X, CONTROLS_Y, CONTROLS_W, INFO_H, INFO_W, INFO_X,
                     INFO_Y, INPUT_GAP, INPUT_W, LEFT_INPUT_X, LEFT_X, MUTED,
                     PANEL, PANEL_2, RIGHT_INPUT_X, RIGHT_X, ROW, SIM_H,
-                    SLIDER_W, TEXT, TITLE_LETTER_SPACING, UI_H, WIDTH,
-                    ANALYSIS_H, ANALYSIS_W, ANALYSIS_X, ANALYSIS_Y)
+                    SLIDER_W, TEXT, TITLE_LETTER_SPACING, UI_H, WIDTH, HEIGHT,
+                    ANALYSIS_H, ANALYSIS_W, ANALYSIS_X, ANALYSIS_Y, LAYOUT)
 from core.display import clock, screen
 from core.fonts import FONT, FONT_BIG, FONT_SMALL, FONT_TINY, FONT_TITLE
 from effects.particles import Particle, ShockWave
@@ -43,6 +43,7 @@ class BaseModel:
                      (38, 52, 88, 55), 18)
 
         self.notice = ""
+        self._info_payload = None
         self.sliders: dict[str, Slider] = {}
         self.input_boxes: dict[str, InputBox] = {}
         self.build_controls()
@@ -114,18 +115,22 @@ class BaseModel:
     def draw_scene(self):
         raise NotImplementedError
 
+    def interface_state(self):
+        """返回统一 Header 所需的状态文本和显示时间。"""
+        return self.phase, self.t
+
     def formula_lines(self):
         return "", ""
 
     def formula_rect(self):
-        return pygame.Rect(CONTROLS_X, BOTTOM_FORMULA_Y, CONTROLS_W, BOTTOM_FORMULA_H)
+        return pygame.Rect(LAYOUT.formula)
 
     def summary_line(self):
         return ""
 
 
     def draw_slider_value(self, key, slider):
-        slider.draw(screen)
+        slider.draw(screen, show_value=False)
 
     def update_inputs(self, dt):
         for box in self.input_boxes.values():
@@ -175,15 +180,45 @@ class BaseModel:
         return changed
 
     def draw_ui(self):
-        ui_y = SIM_H
-        pygame.draw.rect(screen, PANEL, (0, ui_y, WIDTH, UI_H))
-        pygame.draw.line(screen, (65, 80, 125), (0, ui_y), (WIDTH, ui_y), 2)
-        pygame.draw.line(screen, (90, 110, 160), (0, ui_y + 1), (WIDTH, ui_y + 1), 1)
+        """兼容旧主循环的界面入口。"""
+        self.draw_interface()
 
-        analysis_rect = pygame.Rect(ANALYSIS_X, ANALYSIS_Y, ANALYSIS_W, ANALYSIS_H)
-        controls_rect = pygame.Rect(CONTROLS_X, CONTROLS_Y, CONTROLS_W, UI_H)
+    def draw_interface(self):
+        """统一绘制时间轴和底部界面，不让模型重新决定区域边界。"""
+        timeline_rect = pygame.Rect(LAYOUT.timeline)
+        bottom_y = timeline_rect.bottom
+        state_text, display_time = self.interface_state()
+        self.draw_header(state_text, display_time=display_time)
+        if self.app is not None:
+            self.app.draw_mode_tabs()
+        pygame.draw.rect(screen, PANEL, (0, timeline_rect.y, WIDTH, HEIGHT - timeline_rect.y))
+        pygame.draw.line(screen, (65, 80, 125), (0, timeline_rect.y),
+                         (WIDTH, timeline_rect.y), 2)
+        pygame.draw.line(screen, (90, 110, 160), (0, bottom_y),
+                         (WIDTH, bottom_y), 1)
+
+        analysis_rect = pygame.Rect(LAYOUT.analysis)
+        left_rect = pygame.Rect(LAYOUT.params_left)
+        right_rect = pygame.Rect(LAYOUT.params_right)
         rounded_rect(screen, analysis_rect, PANEL_2, 14, 1, (58, 72, 112))
-        rounded_rect(screen, controls_rect, PANEL_2, 14, 1, (58, 72, 112))
+        rounded_rect(screen, left_rect, PANEL_2, 14, 1, (58, 72, 112))
+        rounded_rect(screen, right_rect, PANEL_2, 14, 1, (58, 72, 112))
+
+        if self._info_payload is not None:
+            self.draw_info_panel(*self._info_payload)
+
+        draw_text(screen, "参数", (left_rect.x + 14, left_rect.y + 12),
+                  FONT_SMALL, TEXT)
+        draw_text(screen, "参数", (right_rect.x + 14, right_rect.y + 12),
+                  FONT_SMALL, TEXT)
+        draw_text(screen, "滑块", (left_rect.x + 166, left_rect.y + 12),
+                  FONT_TINY, MUTED)
+        draw_text(screen, "数值", (left_rect.right - 16, left_rect.y + 12),
+                  FONT_TINY, MUTED, anchor="topright")
+        draw_text(screen, "滑块", (right_rect.x + 166, right_rect.y + 12),
+                  FONT_TINY, MUTED)
+        draw_text(screen, "数值", (right_rect.right - 16, right_rect.y + 12),
+                  FONT_TINY, MUTED, anchor="topright")
 
         for key, slider in self.sliders.items():
             self.draw_slider_value(key, slider)
@@ -239,27 +274,16 @@ class BaseModel:
     def draw_header(self, state_text, display_time=None):
         # 标题采用逐字绘制，确保中文字符之间有明显的横向间距。
         title = draw_spaced_text(
-            screen, self.name, (34, 24), FONT_TITLE, TEXT,
+            screen, self.name, (24, 10), FONT_TITLE, TEXT,
             spacing=TITLE_LETTER_SPACING
         )
-        draw_horizontal_gradient_line(screen, 34, title.bottom + 4,
+        draw_horizontal_gradient_line(screen, 24, title.bottom + 3,
                                       title.width, ACCENT, (40, 60, 100), 3)
         if display_time is None:
             display_time = self.t
         draw_text(screen,
                   f"状态：{state_text}    时间：{format_sig3(display_time)} s    FPS:{clock.get_fps():.0f}",
-                  (38, 72), FONT, MUTED)
-
-        extra_hint = " | E 讲解开关 | Space 跳过讲解" if getattr(
-            self, "supports_impact_explanation", False
-        ) else ""
-        replay_hint = " | 时间轴拖拽/←→逐帧/P退出回放" if hasattr(
-            self, "replay"
-        ) else ""
-        draw_text(screen,
-                  "1/2 切换模型 | Space 开始/暂停 | R 重置 | C 直接到碰撞 | Esc 退出"
-                  + extra_hint + replay_hint,
-                  (38, 96), FONT_SMALL, (160, 175, 210))
+                  (28, 52), FONT_SMALL, MUTED)
 
     def step_particles(self, real_dt, gravity=0.0):
         for particle in self.particles:
@@ -278,41 +302,37 @@ class BaseModel:
 
         pygame.draw.rect(screen, (55, 72, 115), info_rect, width=1, border_radius=18)
 
-        draw_text(screen, "实时物理量", (info_rect.x + 20, info_rect.y + 14), FONT_BIG, TEXT)
+        draw_text(screen, "信息面板", (info_rect.x + 18, info_rect.y + 10), FONT_BIG, TEXT)
         draw_horizontal_gradient_line(screen, info_rect.x + 16, info_rect.y + 50,
                                       info_rect.w - 32, ACCENT, (30, 45, 80), 1)
-        y = info_rect.y + 62
-        for line in current_lines:
-            label, sep, value = line.partition("=")
+        collision_lines = collision_lines or []
 
-            if sep:
-                draw_text(screen, label + "=", (info_rect.x + 20, y), FONT_SMALL, MUTED)
-                w = FONT_SMALL.size(label + "=")[0]
-                draw_text(screen, value, (info_rect.x + 20 + w, y), FONT_SMALL, TEXT)
-            else:
-                draw_text(screen, line, (info_rect.x + 20, y), FONT_SMALL, MUTED)
-            y += 24
+        def select_lines(lines, keywords, limit=3):
+            selected = [line for line in lines if any(key in line for key in keywords)]
+            return selected[:limit] or list(lines[:limit])
 
-        y += 2
-
-        draw_horizontal_gradient_line(screen, info_rect.x + 16, y,
-                                      info_rect.w - 32, (60, 80, 130), (20, 30, 55), 1)
-        y += 10
-
-        if collision_lines:
-            draw_text(screen, "碰撞瞬时数据", (info_rect.x + 20, y), FONT, ACCENT_2)
-            y += 28
-            for line in collision_lines:
-                highlight = any(key in line for key in highlight_keywords)
-                draw_text(screen, line, (info_rect.x + 20, y), FONT_SMALL,
-                          ACCENT_3 if highlight else MUTED)
-
-                y += 21
-                if y > info_rect.bottom - 24:
-                    break
-        else:
-            draw_text(screen, "尚未发生碰撞", (info_rect.x + 20, y), FONT, MUTED)
-            y += 30
-            for tip in tips or []:
-                draw_text(screen, tip, (info_rect.x + 28, y), FONT_SMALL, (110, 130, 170))
-                y += 24
+        groups = (
+            ("实时状态", list(current_lines[:3]), ACCENT),
+            ("守恒检查", select_lines(collision_lines, ("角动量", "动量误差", "守恒", "总量")), ACCENT_3),
+            ("能量", select_lines(
+                list(current_lines[3:]) + collision_lines,
+                ("能量", "动能", "耗散", "残差", "摩擦"),
+            ), ACCENT_2),
+        )
+        section_y = info_rect.y + 61
+        for title, lines, color in groups:
+            draw_text(screen, title, (info_rect.x + 18, section_y), FONT_SMALL, color)
+            section_y += 19
+            for line in lines[:2]:
+                draw_text(screen, line, (info_rect.x + 24, section_y), FONT_TINY,
+                          TEXT if title == "实时状态" else MUTED)
+                section_y += 18
+            if not lines:
+                fallback = (tips or ["尚未发生碰撞"])[0]
+                draw_text(screen, fallback, (info_rect.x + 24, section_y),
+                          FONT_TINY, MUTED)
+                section_y += 18
+            if title != "能量":
+                draw_horizontal_gradient_line(screen, info_rect.x + 16, section_y + 3,
+                                              info_rect.w - 32, (60, 80, 130), (20, 30, 55), 1)
+                section_y += 10

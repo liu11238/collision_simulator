@@ -154,6 +154,24 @@ class ReplayTimeline:
         """只读的展示碰撞窗口序列 ``(start, end, collision_id)``。"""
         return tuple(self._collision_windows)
 
+    def trail_frames(self, cursor_time=None, lifetime=0.8, speed_threshold=0.03):
+        """返回时间窗口内可用于重建残影的只读帧。
+
+        Replay 不保存渲染 trail；调用方只需用当前游标、生命周期和速度
+        阈值从普通 ``ReplayFrame`` 重建它，因此 seek 前后不会出现状态残留。
+        """
+        if cursor_time is None:
+            cursor_time = self.cursor
+        cursor_time = float(cursor_time)
+        lifetime = max(0.0, float(lifetime))
+        threshold = abs(float(speed_threshold))
+        start = cursor_time - lifetime
+        return tuple(
+            frame for frame in self.frames
+            if start - 1e-10 <= frame.time <= cursor_time + 1e-10
+            and abs(frame.omega) > threshold
+        )
+
     def clear(self):
         self.frames.clear()
         self.cursor = 0.0

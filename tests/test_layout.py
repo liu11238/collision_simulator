@@ -18,7 +18,8 @@ pygame.init()
 
 from config import (BOTTOM_ACTION_H, BOTTOM_ACTION_Y, BOTTOM_CARD_H,
                     BOTTOM_CARD_Y, BOTTOM_FORMULA_H, BOTTOM_FORMULA_Y,
-                    HEIGHT, LAYOUT, SIM_H, UI_H, WIDTH, build_layout)  # noqa: E402
+                    HEIGHT, LAYOUT, SIM_H, UI_H, WIDTH, build_layout,
+                    HEADER_H, SCENE_H, TIMELINE_H, BOTTOM_H)  # noqa: E402
 from ui.widgets import TimelineSlider  # noqa: E402
 
 
@@ -50,6 +51,20 @@ class LayoutTest(unittest.TestCase):
                 self.rect(layout.info_rect)
             )
         )
+
+        self.assertEqual(layout.header[3], HEADER_H)
+        self.assertEqual(layout.scene[3], SCENE_H)
+        self.assertEqual(layout.timeline[3], TIMELINE_H)
+        self.assertEqual(layout.analysis[3], BOTTOM_H)
+        self.assertEqual(layout.scene[1], HEADER_H)
+        self.assertEqual(layout.timeline[1], HEADER_H + SCENE_H)
+        self.assertEqual(layout.analysis[1], HEADER_H + SCENE_H + TIMELINE_H)
+
+        for left, right in ((layout.params_left, layout.params_right),
+                            (layout.analysis, layout.params_left)):
+            self.assertFalse(self.rect(left).colliderect(self.rect(right)))
+        self.assertTrue(self.rect(layout.params_right).contains(self.rect(layout.formula)))
+        self.assertTrue(self.rect(layout.params_right).contains(self.rect(layout.action)))
 
     def test_legacy_bottom_constants_still_form_valid_vertical_order(self):
         self.assertLess(BOTTOM_FORMULA_Y + BOTTOM_FORMULA_H, BOTTOM_ACTION_Y)

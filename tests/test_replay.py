@@ -11,6 +11,16 @@ def frame(time, **values):
     return ReplayFrame(time=time, **values)
 
 
+class ReplayTrailTest(unittest.TestCase):
+    def test_trail_frames_are_rebuilt_from_time_window(self):
+        timeline = ReplayTimeline()
+        timeline.record_initial(frame(0.0, theta=0.0, omega=0.0))
+        timeline.record_sample(frame(0.2, theta=0.2, omega=0.5), force=True)
+        timeline.record_sample(frame(1.1, theta=1.1, omega=0.5), force=True)
+        selected = timeline.trail_frames(1.1, lifetime=0.8, speed_threshold=0.03)
+        self.assertEqual([item.time for item in selected], [1.1])
+
+
 class ReplayTimelineTest(unittest.TestCase):
     def test_fixed_sampling_drops_intermediate_live_frames(self):
         timeline = ReplayTimeline(sample_interval=0.1)

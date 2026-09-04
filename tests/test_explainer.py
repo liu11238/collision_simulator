@@ -66,6 +66,14 @@ class ExplainerTest(unittest.TestCase):
                 places=10,
             )
 
+    def test_momentum_bar_scales_are_fixed_at_initialization(self):
+        model = self.make_model()
+        explainer = model.impact_explainer
+        scales = (explainer.L_scale, explainer.rod_L_scale, explainer.ball_L_scale)
+        explainer.elapsed = 1.0
+        self.assertEqual(scales, (explainer.L_scale, explainer.rod_L_scale,
+                                  explainer.ball_L_scale))
+
     def test_display_speed_is_continuous_at_stage_boundaries(self):
         model = self.make_model()
         explainer = model.impact_explainer

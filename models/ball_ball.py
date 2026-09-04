@@ -11,7 +11,8 @@ from config import (ACCENT, ACCENT_2, ACCENT_3, BALL1_COLOR, BALL1_EDGE,
                     BOTTOM_FORMULA_H, BOTTOM_FORMULA_Y, GREEN, MUTED, PLATFORM,
                     PLATFORM_TOP,
                     RED, SIM_H, WIDTH, ANALYSIS_H, ANALYSIS_W, ANALYSIS_X,
-                    ANALYSIS_Y, TEXT, SCENE_X, SCENE_W, CONTROLS_X, CONTROLS_W)
+                    ANALYSIS_Y, TEXT, SCENE_X, SCENE_W, CONTROLS_X, CONTROLS_W,
+                    LAYOUT, SCENE_Y, SCENE_H)
 from core.display import (STATIC_BG, flash_surf, glow_surf, particle_surf,
                           screen, trail_surf_1, trail_surf_2)
 from core.fonts import FONT_BIG, FONT_SMALL, FONT_TINY
@@ -177,7 +178,11 @@ class BallBallCollision(BaseModel):
         )
 
     def formula_rect(self):
-        return pygame.Rect(CONTROLS_X, BOTTOM_FORMULA_Y, CONTROLS_W, BOTTOM_FORMULA_H)
+        return pygame.Rect(LAYOUT.formula)
+
+    def interface_state(self):
+        return ({"ready": "待开始", "moving": "两球运动中", "after": "碰撞后运动"}
+                .get(self.phase, self.phase), self.t)
 
     def summary_line(self):
         return (f"m1={format_sig3(self.sliders['m1'].value)}  u1={format_sig3(self.sliders['u1'].value)}  "
@@ -211,8 +216,8 @@ class BallBallCollision(BaseModel):
         m1 = self.sliders["m1"].value
         m2 = self.sliders["m2"].value
         scale = 92.0
-        origin_x = 405
-        center_y = 270
+        origin_x = SCENE_X + int(SCENE_W * 0.44)
+        center_y = SCENE_Y + int(SCENE_H * 0.56)
 
         radius_px = int(self.BALL_RADIUS_WORLD * scale)
         platform_y = center_y + radius_px + 14
@@ -221,10 +226,6 @@ class BallBallCollision(BaseModel):
             return int(origin_x + x * scale), int(center_y - y * scale)
 
         screen.blit(STATIC_BG, (0, 0))
-        self.draw_header({"ready": "待开始", "moving": "两球运动中", "after": "碰撞后运动"}.get(self.phase, self.phase))
-
-        self.app.draw_mode_tabs()
-
         scene_left, scene_right = SCENE_X, SCENE_X + SCENE_W
         pygame.draw.line(screen, (22, 28, 48), (scene_left, platform_y + 10), (scene_right, platform_y + 10), 10)
         pygame.draw.line(screen, (35, 44, 70), (scene_left, platform_y + 4), (scene_right, platform_y + 4), 8)
@@ -234,7 +235,7 @@ class BallBallCollision(BaseModel):
         for tx in range(scene_left, scene_right, 18):
             pygame.draw.line(screen, (100, 115, 155), (tx, platform_y), (tx + 6, platform_y + 4), 1)
 
-        pygame.draw.line(screen, (80, 100, 150), (35, center_y), (860, center_y), 1)
+        pygame.draw.line(screen, (80, 100, 150), (scene_left, center_y), (scene_right, center_y), 1)
         for world_x in range(-4, 5):
             sx, _ = w2s(world_x)
             pygame.draw.line(screen, (85, 105, 150), (sx, center_y - 7), (sx, center_y + 7), 1)
@@ -345,12 +346,6 @@ class BallBallCollision(BaseModel):
             pygame.draw.circle(flash_surf, (120, 180, 255, int(a0 * 0.20)), contact, r0 + int(55 * f))
             screen.blit(flash_surf, (0, 0))
 
-        if self.notice:
-            notice_rect = pygame.Rect(38, 192, 820, 40)
-
-            rounded_rect(screen, notice_rect, (62, 28, 38), 10, 1, (145, 65, 80))
-            draw_text(screen, self.notice, notice_rect.center, FONT_SMALL, (255, 185, 190), anchor="center")
-
         p_now = m1 * self.v1 + m2 * self.v2
         ke1 = 0.5 * m1 * self.v1 * self.v1
         ke2 = 0.5 * m2 * self.v2 * self.v2
@@ -378,9 +373,15 @@ class BallBallCollision(BaseModel):
                 f"动量误差 = {format_sig3(abs(r['p_after'] - r['p_before']))}",
                 f"动能变化 = {format_sig3(r['ke_after'] - r['ke_before'])} J",
             ]
-        self.draw_info_panel(current_lines, collision_lines,
-                             ["仅当 u1 > u2 时两球会相撞", "e=1 为理想弹性碰撞", "正速度向右，负速度向左"],
-                             ("碰后 v1", "碰后 v2", "冲量", "动量误差"))
+        tips = ["仅当 u1 > u2 时两球会相撞", "e=1 为理想弹性碰撞", "正速度向右，负速度向左"]
+        if self.notice:
+            tips.insert(0, self.notice)
+        self._info_payload = (
+            current_lines,
+            collision_lines,
+            tips,
+            ("碰后 v1", "碰后 v2", "冲量", "动量误差"),
+        )
 
 
 class DiagnosticsBuffer:
