@@ -182,6 +182,9 @@ class App:
                 model.sync_inputs(force=False)
 
             model.step(dt)
+            # 标题、时间与 FPS 每帧都可能变短；必须先重绘完整背景，
+            # 否则旧字形会残留。背景同时覆盖顶栏和整个场景宽度。
+            display.begin_frame()
             model.draw_scene()
             model.draw_interface()
             pygame.display.flip()

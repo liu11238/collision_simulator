@@ -159,6 +159,15 @@ class LayoutTest(unittest.TestCase):
                       ["一段需要裁剪的文字"], get_font(14), (255, 255, 255))
         self.assertEqual(surface.get_clip(), parent)
 
+    def test_rod_height_input_stays_in_parameter_panel(self):
+        from models.ball_rod import BallHitsRod
+        model = BallHitsRod()
+        panel = pygame.Rect(LAYOUT.parameter_panel)
+        self.assertTrue(panel.contains(model.input_boxes["h"].rect))
+        height_slider = model.sliders["height_ratio"]
+        self.assertEqual(model.input_boxes["h"].rect.y,
+                         height_slider.y - min(29, LAYOUT.metrics.parameter_row_height - 13))
+
 
 if __name__ == "__main__":
     unittest.main()

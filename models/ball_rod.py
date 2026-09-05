@@ -77,13 +77,6 @@ class BallHitsRod(BaseModel):
             "h", "精确输入", 0, 0, 84, self.current_h(), "m"
         )
 
-    def layout_controls(self):
-        super().layout_controls()
-        # h 精确输入框占据 height_ratio 行的“数值”列。
-        anchor = self.sliders["height_ratio"]
-        self.input_boxes["h"].set_rect(
-            anchor.x + anchor.w + 14, anchor.y - 8, 84)
-
     def current_h(self):
         return self.sliders["height_ratio"].value * self.sliders["L"].value
 

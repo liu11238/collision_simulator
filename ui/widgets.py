@@ -371,8 +371,8 @@ class InputBox:
         self.invalid_flash = max(0.0, self.invalid_flash - dt * 3.0)
 
     def draw(self, surface):
-        draw_text(surface, self.label,
-                  (self.rect.x, self.rect.y - 18), FONT_TINY, MUTED)
+        # 参数名称已由 ParameterPanel 在单元第一行统一绘制。旧的
+        # “精确输入”辅助标签会侵入面板标题，尤其遮挡第一行，故不再常驻。
         border = RED if self.invalid_flash > 0 else (
             INPUT_ACTIVE if self.active else INPUT_BORDER
         )

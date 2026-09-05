@@ -35,6 +35,12 @@ from render.primitives import create_static_background  # noqa: E402
 STATIC_BG = create_static_background(DEFAULT_WIDTH, LAYOUT.sim_h)
 
 
+def begin_frame():
+    """清空整帧并铺满顶栏/场景背景，避免动态文字残影和黑边。"""
+    screen.fill((6, 10, 22))
+    screen.blit(STATIC_BG, (0, 0))
+
+
 def resize_display(width: int, height: int):
     """把窗口调整到 ``(width, height)`` 并重建全部共享图层。
 
