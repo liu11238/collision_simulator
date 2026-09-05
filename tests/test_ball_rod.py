@@ -155,6 +155,10 @@ class BallRodTest(unittest.TestCase):
         self.assertAlmostEqual(result["ke_before"], result["ke_after"], places=10)
         self.assertAlmostEqual(result["relative_after"],
                                -result["relative_before"], places=10)
+        self.assertAlmostEqual(result.angular_momentum_error, 0.0, places=10)
+        self.assertAlmostEqual(result.restitution_error, 0.0, places=10)
+        self.assertAlmostEqual(result.energy_residual, 0.0, places=10)
+        self.assertAlmostEqual(result.collision_loss_error, 0.0, places=10)
 
     def test_restitution_coefficient(self):
         model = self.make_model(vc=3.0, h=0.72, e=0.5)

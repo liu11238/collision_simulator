@@ -20,6 +20,8 @@ from config import (BAND_DEFAULT, BAND_MINIMUM, DEFAULT_HEIGHT, DEFAULT_WIDTH,
                     LAYOUT, MIN_HEIGHT, MIN_WIDTH, build_layout,
                     build_metrics)  # noqa: E402
 from ui.widgets import TimelineSlider  # noqa: E402
+from core.fonts import get_font  # noqa: E402
+from render.text import draw_text_box  # noqa: E402
 
 MATRIX = [
     (1280, 720),
@@ -141,6 +143,21 @@ class LayoutTest(unittest.TestCase):
     def test_timeline_slider_keeps_legacy_constructor(self):
         slider = TimelineSlider(24, 40, 858)
         self.assertEqual(slider.rect, pygame.Rect(24, 40, 858, 28))
+
+    def test_parameter_rows_have_two_line_minimum_height(self):
+        for width, height in MATRIX:
+            with self.subTest(size=(width, height)):
+                self.assertGreaterEqual(
+                    build_metrics(width, height).parameter_row_height, 44
+                )
+
+    def test_text_box_restores_parent_clip(self):
+        surface = pygame.Surface((300, 180))
+        parent = pygame.Rect(20, 20, 180, 100)
+        surface.set_clip(parent)
+        draw_text_box(surface, pygame.Rect(30, 30, 80, 40),
+                      ["一段需要裁剪的文字"], get_font(14), (255, 255, 255))
+        self.assertEqual(surface.get_clip(), parent)
 
 
 if __name__ == "__main__":

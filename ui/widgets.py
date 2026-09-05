@@ -81,7 +81,8 @@ class Slider:
 
         return changed
 
-    def draw(self, surface, value_text=None, show_value=True):
+    def draw(self, surface, value_text=None, show_value=True, show_label=True,
+             label_font=None):
         surface.blit(self._static_track, (self.x, self.y - 8))
         kx = self.knob_x()
         if kx > self.x:
@@ -96,8 +97,9 @@ class Slider:
         pygame.draw.circle(surface, (220, 245, 255), (kx - 4, self.y - 4), 4)
         label_width = max(40, int(self.w * 0.62))
         value_width = max(40, self.w - label_width + 10)
-        draw_text(surface, self.label, (self.x, self.y - 30), FONT_SMALL,
-                  MUTED, max_width=label_width)
+        if show_label:
+            draw_text(surface, self.label, (self.x, self.y - 30),
+                      label_font or FONT_SMALL, MUTED, max_width=label_width)
         if value_text is None:
             value_text = f"{format_sig3(self.value)}{self.unit}"
         if show_value:

@@ -81,14 +81,15 @@ class BaseModel:
                                          unit.strip())
 
     def layout_controls(self):
-        """把参数行按两列网格摆进 parameter_panel，行高来自排版度量。"""
+        """把参数按“标签/数值 + 滑块”的两层单元摆进参数面板。"""
         metrics = LAYOUT.metrics
         panel = pygame.Rect(LAYOUT.parameter_panel)
         pad = metrics.panel_padding
         content = panel.inflate(-2 * pad, 0)
-        content.top = panel.top + PANEL_TITLE_H + 6
+        content.top = panel.top + PANEL_TITLE_H + 8
 
         input_w = 84
+        unit_w = 44
         col_gap = pad
         col_w = max(200, (content.w - col_gap) // 2)
         row_h = metrics.parameter_row_height
@@ -97,12 +98,18 @@ class BaseModel:
             column = spec["column"]
             row = spec["row"]
             x = content.x + column * (col_w + col_gap)
-            y = content.y + row * row_h
+            cell_y = content.y + row * row_h
+            slider_y = cell_y + min(29, row_h - 13)
             if key in self.sliders:
-                self.sliders[key].set_rect(x, y, col_w - input_w - 14)
-            if key in self.input_boxes:
-                self.input_boxes[key].set_rect(x + col_w - input_w, y - 8,
-                                               input_w)
+                # 滑块占据单元第二行；第一行专用于名称与精确输入。
+                # 两端为 14px 半径的旋钮留出空间，极值时也不会被裁剪。
+                self.sliders[key].set_rect(x + 14, slider_y, col_w - 28)
+            input_key = "h" if key == "height_ratio" and "h" in self.input_boxes else key
+            if input_key in self.input_boxes:
+                self.input_boxes[input_key].set_rect(
+                    x + col_w - input_w - unit_w, cell_y,
+                    input_w, min(26, row_h - 16)
+                )
 
     def any_input_active(self):
         return any(box.active for box in self.input_boxes.values())
@@ -169,7 +176,7 @@ class BaseModel:
         return []
 
     def draw_slider_value(self, key, slider):
-        slider.draw(display.screen, show_value=False)
+        slider.draw(display.screen, show_value=False, show_label=False)
 
     def update_inputs(self, dt):
         for box in self.input_boxes.values():
@@ -310,27 +317,19 @@ class BaseModel:
             info_rect.w - 32, ACCENT, (30, 45, 80), 1)
         collision_lines = collision_lines or []
 
-        def select_lines(lines, keywords, limit=3):
-            selected = [line for line in lines
-                        if any(key in line for key in keywords)]
-            return selected[:limit] or list(lines[:limit])
-
+        # 保留完整碰撞快照，不再按关键词截成两行。面板高度不足时由
+        # inspector_scroll 浏览，避免关键的碰前/碰后参数被静默丢弃。
         groups = (
-            ("实时状态", list(current_lines[:3]), ACCENT),
-            ("守恒检查", select_lines(collision_lines,
-                                      ("角动量", "动量误差", "守恒", "总量")),
-             ACCENT_3),
-            ("能量", select_lines(
-                list(current_lines[3:]) + collision_lines,
-                ("能量", "动能", "耗散", "残差", "摩擦"),
-            ), ACCENT_2),
+            ("实时状态", list(current_lines), ACCENT),
+            ("碰撞瞬间（碰前 → 碰后）", list(collision_lines), ACCENT_3),
+            ("说明", list(tips or [])[:2], ACCENT_2),
         )
 
         rows = []
         for title, lines, color in groups:
             rows.append((title, color, True))
             if lines:
-                for line in lines[:2]:
+                for line in lines:
                     rows.append(
                         (line, TEXT if title == "实时状态" else MUTED, False))
             else:
@@ -341,7 +340,7 @@ class BaseModel:
         content = pygame.Rect(info_rect.x + 18, content_top,
                               info_rect.w - 36,
                               max(0, info_rect.bottom - 10 - content_top))
-        line_h = tiny.get_height() + 5
+        line_h = tiny.get_height() + 4
         max_scroll = max(0, len(rows) * line_h - content.h)
         self.inspector_scroll = clamp(self.inspector_scroll, 0, max_scroll)
         with clipped(screen, content):
@@ -391,20 +390,21 @@ class BaseModel:
         param_content = self._draw_panel_frame(LAYOUT.parameter_panel, "参数")
         panel = pygame.Rect(LAYOUT.parameter_panel)
         pad = metrics.panel_padding
-        col_w = (panel.w - 2 * pad - pad) // 2
+        col_w = (param_content.w - pad) // 2
         tiny = font(metrics.tiny_font_size)
-        header_h = tiny.get_height() + 4
-        with clipped(screen, param_content):
-            for column in (0, 1):
-                x = param_content.x + column * (col_w + pad)
-                draw_text(screen, "滑块", (x, param_content.y), tiny, MUTED)
-                draw_text(screen, "数值", (x + col_w, param_content.y), tiny,
-                          MUTED, anchor="topright")
-        rows_rect = pygame.Rect(param_content.x,
-                                param_content.y + header_h,
-                                param_content.w,
-                                max(0, param_content.h - header_h))
+        rows_rect = pygame.Rect(param_content)
         with clipped(screen, rows_rect):
+            # 名称和数值在每个参数单元第一行，滑块只占第二行。
+            for key, spec in self._control_specs.items():
+                column, row = spec["column"], spec["row"]
+                cell_x = rows_rect.x + column * (col_w + pad)
+                cell_y = rows_rect.y + row * metrics.parameter_row_height
+                input_key = "h" if key == "height_ratio" and "h" in self.input_boxes else key
+                input_box = self.input_boxes.get(input_key)
+                label_right = (input_box.rect.x - 6
+                               if input_box is not None else cell_x + col_w)
+                draw_text(screen, spec["label"], (cell_x, cell_y + 3), tiny,
+                          MUTED, max_width=max(20, label_right - cell_x))
             for key, slider in self.sliders.items():
                 self.draw_slider_value(key, slider)
             for box in self.input_boxes.values():
@@ -434,7 +434,7 @@ class BaseModel:
                           tiny, MUTED)
 
     def draw_energy_panel(self, rect):
-        """能量面板默认内容：模型提供的文本行。"""
+        """能量面板默认内容。模型可覆写以绘制结构化账本。"""
         lines = self.energy_panel_lines()
         if not lines and self.summary_line():
             lines = [self.summary_line()]

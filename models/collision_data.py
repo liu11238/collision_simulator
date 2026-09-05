@@ -106,6 +106,30 @@ class CollisionSnapshot:
     def collision_impulse(self):
         return self.impulse
 
+    @property
+    def delta_ball_velocity(self):
+        return self.v_after - self.u_before
+
+    @property
+    def delta_rod_omega(self):
+        return self.omega_after - self.omega_before
+
+    @property
+    def angular_momentum_error(self):
+        return self.total_L_after - self.total_L_before
+
+    @property
+    def restitution_error(self):
+        return self.relative_after + self.e * self.relative_before
+
+    @property
+    def collision_loss_error(self):
+        return self.collision_energy_loss - self.collision_loss_theory
+
+    @property
+    def energy_residual(self):
+        return self.energy_after - self.energy_before + self.collision_energy_loss
+
     def conservation_report(self):
         """返回区分物理耗散与数值误差的守恒报告。"""
         before = self.conservation_before

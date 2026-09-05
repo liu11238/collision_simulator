@@ -14,7 +14,9 @@ from core import display
 from core.fonts import FONT_BIG, FONT_SMALL, FONT_TINY
 from effects.particles import spawn_impact_particles
 from models.base import BaseModel
+from render.energy import EnergyState, draw_energy_ledger
 from render.primitives import draw_arrow, draw_text, rounded_rect
+from render.text import clipped
 from utils import clamp, format_sig3, lerp_color
 
 class BallBallCollision(BaseModel):
@@ -120,11 +122,32 @@ class BallBallCollision(BaseModel):
             "p_after": p_after,
             "ke_before": ke_before,
             "ke_after": ke_after,
+            "collision_energy_loss": max(0.0, ke_before - ke_after),
             "impact_time": self.t,
             "contact_x": contact_x,
         }
         spawn_impact_particles(self.particles, self.shockwaves, contact_x, 0.0,
                                relative_before, symmetric=True)
+
+    def energy_state_for_display(self):
+        m1 = self.sliders["m1"].value
+        m2 = self.sliders["m2"].value
+        ke1 = 0.5 * m1 * self.v1 * self.v1
+        ke2 = 0.5 * m2 * self.v2 * self.v2
+        if self.last_result:
+            initial = self.last_result["ke_before"]
+            loss = self.last_result["collision_energy_loss"]
+        else:
+            initial = ke1 + ke2
+            loss = 0.0
+        mechanical = ke1 + ke2
+        return EnergyState(initial=initial, mechanical=mechanical,
+                           rod_kinetic=ke1, ball_kinetic=ke2,
+                           collision_loss=loss,
+                           residual=initial - mechanical - loss)
+
+    def draw_energy_panel(self, rect):
+        draw_energy_ledger(display.screen, rect, self.energy_state_for_display())
 
 
     def _advance_simulation_substep(self, sub):
@@ -208,6 +231,10 @@ class BallBallCollision(BaseModel):
                       ACCENT_3 if delta_v > 0 else RED, max_width=rect.w - 4)
 
     def draw_scene(self):
+        with clipped(display.screen, pygame.Rect(LAYOUT.scene)):
+            self._draw_scene_contents()
+
+    def _draw_scene_contents(self):
         m1 = self.sliders["m1"].value
         m2 = self.sliders["m2"].value
         scale = 92.0

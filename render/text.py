@@ -112,7 +112,8 @@ def draw_text_box(surface, rect, lines, font, color, line_gap=4,
     rect = pygame.Rect(rect)
     if rect.h <= 0 or rect.w <= 0:
         return 0
-    surface.set_clip(rect)
+    previous = surface.get_clip()
+    surface.set_clip(previous.clip(rect))
     try:
         y = rect.y
         drawn = 0
@@ -132,7 +133,7 @@ def draw_text_box(surface, rect, lines, font, color, line_gap=4,
             drawn += 1
         return drawn
     finally:
-        surface.set_clip(None)
+        surface.set_clip(previous)
 
 
 def format_measurement(value, sig: int = 4) -> str:

@@ -19,7 +19,8 @@ from presentation.collision_explainer import CollisionExplainer
 from replay.timeline import ReplayFrame, ReplayTimeline
 from render.energy import EnergyState
 from render.primitives import draw_arrow, draw_text, rounded_rect
-from render.energy.energy_renderer import draw_energy_flow
+from render.text import clipped
+from render.energy.energy_renderer import draw_energy_flow, draw_energy_ledger
 from render.replay_fx import draw_friction_heat_fx, draw_impact_fx
 from ui.widgets import InputBox
 from utils import clamp, format_sig3
@@ -853,11 +854,16 @@ class BallHitsRod(BaseModel):
                 display.screen,
                 f"h = {format_sig3(self.current_h())} m  ({format_sig3(slider.value)}L)",
                 show_value=False,
+                show_label=False,
             )
         else:
-            slider.draw(display.screen, show_value=False)
+            slider.draw(display.screen, show_value=False, show_label=False)
 
     def draw_scene(self):
+        with clipped(display.screen, pygame.Rect(LAYOUT.scene)):
+            self._draw_scene_contents()
+
+    def _draw_scene_contents(self):
         m = self.sliders["m"].value
         L = self.sliders["L"].value
         h = self.current_h()
@@ -1228,20 +1234,21 @@ class BallHitsRod(BaseModel):
         if result:
             r = result
             collision_lines = [
-                f"目标碰撞点速率 = {format_sig3(self.target_collision_speed())} m/s",
                 f"碰撞时刻 t = {format_sig3(r['impact_time'])} s",
-                f"恢复系数 e = {format_sig3(r['e'])}",
-                f"碰前杆角动量 = {format_sig3(r['rod_L_before'])}",
-                f"碰前小球 MRV = {format_sig3(r['ball_MRV_before'])}",
-                f"碰前绕轴总角动量 = {format_sig3(r['total_L_before'])}",
-                f"碰后杆角动量 = {format_sig3(r['rod_L_after'])}",
-                f"碰后小球 MRV = {format_sig3(r['ball_MRV_after'])}",
-                f"碰后绕轴总角动量 = {format_sig3(r['total_L_after'])}",
-                f"角动量误差 = {format_sig3(abs(r['total_L_after'] - r['total_L_before']))}",
-                f"均匀细杆打击中心 2L/3 = {format_sig3(self.percussion_center())} m",
-                f"转轴外冲量 = {format_sig3(r['pivot_impulse'])} N*s（h=2L/3 时为零）",
-                f"碰撞能量耗散 = {format_sig3(r['collision_energy_loss'])} J",
-                f"碰撞账本残差 = {format_sig3(r.conservation_report()['energy_residual'])} J",
+                f"e={format_sig3(r.e)}  h={format_sig3(r.h)} m  J={format_sig3(r.impulse)} N·s",
+                f"小球速度  {format_sig3(r.u_before)} → {format_sig3(r.v_after)} m/s",
+                f"杆角速度  {format_sig3(r.omega_before)} → {format_sig3(r.omega_after)} rad/s",
+                f"碰撞点速度  {format_sig3(r.contact_before)} → {format_sig3(r.contact_after)} m/s",
+                f"相对速度  {format_sig3(r.relative_before)} → {format_sig3(r.relative_after)} m/s",
+                f"杆角动量  {format_sig3(r.rod_L_before)} → {format_sig3(r.rod_L_after)}",
+                f"球角动量  {format_sig3(r.ball_MRV_before)} → {format_sig3(r.ball_MRV_after)}",
+                f"总角动量  {format_sig3(r.total_L_before)} → {format_sig3(r.total_L_after)}",
+                f"角动量误差 = {format_sig3(r.angular_momentum_error)} kg·m²/s",
+                f"恢复条件误差 = {format_sig3(r.restitution_error)} m/s",
+                f"转轴外冲量 = {format_sig3(r.pivot_impulse)} N·s",
+                f"动能  {format_sig3(r.ke_before)} → {format_sig3(r.ke_after)} J",
+                f"碰撞耗散 = {format_sig3(r.collision_energy_loss)} J",
+                f"能量残差 = {format_sig3(r.energy_residual)} J",
             ]
         self._info_payload = (
             current_lines, collision_lines,
@@ -1262,8 +1269,11 @@ class BallHitsRod(BaseModel):
             explainer.draw(display.screen, rect)
             return
         if getattr(self, "_analysis_show_energy", False):
-            draw_energy_flow(display.screen, rect, self._analysis_account)
-            return
+            snapshot = (self.replay_collision_snapshot()
+                        if self.replay_mode else self.collision_snapshot)
+            if snapshot is not None:
+                self._draw_collision_replay_summary(rect, snapshot)
+                return
 
         draw_text(display.screen, "角动量分量（数值为有符号量）",
                   (rect.x + 2, rect.y + 2), FONT_TINY, MUTED)
@@ -1291,3 +1301,42 @@ class BallHitsRod(BaseModel):
                       FONT_TINY, color, anchor="topright")
         draw_text(display.screen, f"总角动量 = {format_sig3(total_l)} kg*m^2/s",
                   (rect.x + 14, rect.bottom - 28), FONT_SMALL, ACCENT_3)
+
+    def _draw_collision_replay_summary(self, rect, snapshot):
+        """碰撞结束后保留清晰的三阶段概览，而不是占用能量面板。"""
+        from core.fonts import font
+        rect = pygame.Rect(rect)
+        tiny = font(LAYOUT.metrics.tiny_font_size)
+        small = font(LAYOUT.metrics.small_font_size, True)
+        labels = ("① 碰撞前", "② 冲量传递", "③ 碰撞后")
+        centers = [rect.x + int(rect.w * p) for p in (0.16, 0.50, 0.84)]
+        y = rect.y + 8
+        for i in range(2):
+            pygame.draw.line(display.screen, (65, 82, 125),
+                             (centers[i] + 34, y + 9),
+                             (centers[i + 1] - 34, y + 9), 2)
+        for center, label in zip(centers, labels):
+            pygame.draw.circle(display.screen, ACCENT_2, (center, y + 9), 5)
+            draw_text(display.screen, label, (center, y + 22), tiny, TEXT,
+                      anchor="midtop", max_width=max(70, rect.w // 3 - 8))
+        rows = (
+            ("小球速度", snapshot.u_before, snapshot.v_after, "m/s"),
+            ("杆角速度", snapshot.omega_before, snapshot.omega_after, "rad/s"),
+            ("相对速度", snapshot.relative_before, snapshot.relative_after, "m/s"),
+            ("总角动量", snapshot.total_L_before, snapshot.total_L_after, "kg·m²/s"),
+        )
+        y += 54
+        for label, before, after, unit in rows:
+            draw_text(display.screen,
+                      f"{label}  {format_sig3(before)} → {format_sig3(after)} {unit}",
+                      (rect.x + 4, y), tiny, MUTED, max_width=rect.w - 8)
+            y += tiny.get_height() + 5
+        draw_text(display.screen, f"冲量 J = {format_sig3(snapshot.impulse)} N·s",
+                  (rect.x + 4, min(y + 3, rect.bottom - small.get_height())),
+                  small, ACCENT_2, max_width=rect.w - 8)
+
+    def draw_energy_panel(self, rect):
+        """能量账本始终固定在右侧底部面板。"""
+        account = getattr(self, "_analysis_account", None) or self.energy_breakdown()
+        snapshot = self.replay_collision_snapshot() if self.replay_mode else self.collision_snapshot
+        draw_energy_ledger(display.screen, rect, account, snapshot=snapshot)

@@ -260,7 +260,9 @@ def build_metrics(width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT) -> LayoutMetrics:
         body_font_size=int(round(_lerp(15, 17, t))),
         small_font_size=int(round(_lerp(13, 15, t))),
         tiny_font_size=int(round(_lerp(12, 13, t))),
-        parameter_row_height=int(round(_lerp(31, 38, t))),
+        # 参数单元使用“标签/数值 + 滑块”两层布局；44px 是 720p 下
+        # 不发生纵向遮挡的最小高度。
+        parameter_row_height=int(round(_lerp(44, 50, t))),
     )
 
 
