@@ -122,8 +122,10 @@ class BaseModel:
         for key, spec in self._toggle_specs.items():
             x = content.x + spec["column"] * (col_w + col_gap)
             cell_y = content.y + spec["row"] * row_h
-            # 开关摆放在参数单元第二行，与滑块共用同一行高。
-            self.toggles[key].set_rect(x + 2, cell_y + min(29, row_h - 13))
+            # 开关与标签同处单元第一行右端（与精确输入框垂直对齐）。放在
+            # 第二行会使最后一行的胶囊超出面板内容裁剪区而被遮挡一半。
+            toggle = self.toggles[key]
+            toggle.set_rect(x + col_w - toggle.track_w - 4, cell_y + 2)
 
     def any_input_active(self):
         return any(box.active for box in self.input_boxes.values())
@@ -442,7 +444,7 @@ class BaseModel:
                 toggle = self.toggles[key]
                 draw_text(screen, spec["label"], (cell_x, cell_y + 3), tiny,
                           MUTED,
-                          max_width=max(20, toggle.rect.x - 8 - cell_x))
+                          max_width=max(20, toggle.rect.x - 34 - cell_x))
             for toggle in self.toggles.values():
                 toggle.draw(screen)
 

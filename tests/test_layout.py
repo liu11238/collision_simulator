@@ -168,6 +168,29 @@ class LayoutTest(unittest.TestCase):
         self.assertEqual(model.input_boxes["h"].rect.y,
                          height_slider.y - min(29, LAYOUT.metrics.parameter_row_height - 13))
 
+    def test_explain_toggle_fits_inside_parameter_panel_content(self):
+        from models.ball_rod import BallHitsRod
+        from models.base import PANEL_TITLE_H
+
+        for width, height in ((DEFAULT_WIDTH, DEFAULT_HEIGHT),
+                              (MIN_WIDTH, MIN_HEIGHT)):
+            with self.subTest(size=(width, height)):
+                LAYOUT.apply(width, height)
+                try:
+                    model = BallHitsRod()
+                    toggle = model.toggles["explain"]
+                    panel = pygame.Rect(LAYOUT.parameter_panel)
+                    pad = LAYOUT.metrics.panel_padding
+                    content = pygame.Rect(
+                        panel.x + pad, panel.y + PANEL_TITLE_H + 4,
+                        panel.w - 2 * pad,
+                        max(0, panel.h - PANEL_TITLE_H - 4 - pad))
+                    self.assertTrue(
+                        content.contains(toggle.rect),
+                        f"toggle {toggle.rect} escapes content {content}")
+                finally:
+                    LAYOUT.apply(DEFAULT_WIDTH, DEFAULT_HEIGHT)
+
 
 if __name__ == "__main__":
     unittest.main()

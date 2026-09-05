@@ -445,5 +445,6 @@ class Toggle:
         pygame.draw.circle(surface, knob, (knob_x, self.rect.centery), 8)
 
         state = "开" if self.value else "关"
-        draw_text(surface, state, (self.rect.right + 10, self.rect.y + 3),
-                  FONT_TINY, ACCENT_3 if self.value else MUTED)
+        draw_text(surface, state, (self.rect.x - 10, self.rect.y + 3),
+                  FONT_TINY, ACCENT_3 if self.value else MUTED,
+                  anchor="topright")
