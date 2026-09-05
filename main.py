@@ -173,6 +173,10 @@ class App:
                 if self.btn_snap.clicked(event):
                     model.jump_to_collision()
 
+                if model.handle_toggles(event):
+                    # 开关只影响展示选项，不需要重置仿真。
+                    continue
+
                 if model.handle_sliders(event):
                     need_reset = True
 

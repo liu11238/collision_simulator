@@ -17,7 +17,7 @@ from effects.particles import Particle, ShockWave
 from render.primitives import (draw_horizontal_gradient_line, draw_spaced_text,
                                draw_text, rounded_rect)
 from render.text import clipped, draw_text_box, wrap_chinese_text
-from ui.widgets import InputBox, Slider, TimelineSlider
+from ui.widgets import InputBox, Slider, TimelineSlider, Toggle
 from utils import clamp, format_sig3, safe_float
 
 PANEL_TITLE_H = 30
@@ -43,6 +43,8 @@ class BaseModel:
         self._control_specs: dict[str, dict] = {}
         self.sliders: dict[str, Slider] = {}
         self.input_boxes: dict[str, InputBox] = {}
+        self._toggle_specs: dict[str, dict] = {}
+        self.toggles: dict[str, Toggle] = {}
         self.build_controls()
         self.timeline_slider = TimelineSlider(0, 0, 200)
         self.inspector_scroll = 0
@@ -80,6 +82,12 @@ class BaseModel:
         self.input_boxes[key] = InputBox(key, "精确输入", 0, 0, 84, value,
                                          unit.strip())
 
+    def add_toggle(self, key, label, column, row, value=True):
+        """登记开关控件；几何在 :meth:`layout_controls` 中按当前布局计算。"""
+        self._toggle_specs[key] = {"label": label, "column": int(column),
+                                   "row": int(row)}
+        self.toggles[key] = Toggle(0, 0, bool(value))
+
     def layout_controls(self):
         """把参数按“标签/数值 + 滑块”的两层单元摆进参数面板。"""
         metrics = LAYOUT.metrics
@@ -110,6 +118,12 @@ class BaseModel:
                     x + col_w - input_w - unit_w, cell_y,
                     input_w, min(26, row_h - 16)
                 )
+
+        for key, spec in self._toggle_specs.items():
+            x = content.x + spec["column"] * (col_w + col_gap)
+            cell_y = content.y + spec["row"] * row_h
+            # 开关摆放在参数单元第二行，与滑块共用同一行高。
+            self.toggles[key].set_rect(x + 2, cell_y + min(29, row_h - 13))
 
     def any_input_active(self):
         return any(box.active for box in self.input_boxes.values())
@@ -215,6 +229,18 @@ class BaseModel:
             self.sync_inputs(force=False)
 
         return changed
+
+    def handle_toggles(self, event):
+        """处理参数面板开关点击；返回是否有开关被切换。"""
+        changed = False
+        for key, toggle in self.toggles.items():
+            if toggle.handle_event(event):
+                changed = True
+                self.on_toggle_changed(key, toggle.value)
+        return changed
+
+    def on_toggle_changed(self, key, value):
+        """开关切换回调；模型可覆写以同步内部状态。"""
 
     def handle_timeline(self, event):
         """处理回放时间轴；只对接入 ReplayTimeline 的模型生效。"""
@@ -409,6 +435,16 @@ class BaseModel:
                 self.draw_slider_value(key, slider)
             for box in self.input_boxes.values():
                 box.draw(screen)
+            for key, spec in self._toggle_specs.items():
+                column, row = spec["column"], spec["row"]
+                cell_x = rows_rect.x + column * (col_w + pad)
+                cell_y = rows_rect.y + row * metrics.parameter_row_height
+                toggle = self.toggles[key]
+                draw_text(screen, spec["label"], (cell_x, cell_y + 3), tiny,
+                          MUTED,
+                          max_width=max(20, toggle.rect.x - 8 - cell_x))
+            for toggle in self.toggles.values():
+                toggle.draw(screen)
 
         energy_content = self._draw_panel_frame(LAYOUT.energy_panel, "能量面板")
         with clipped(screen, energy_content):

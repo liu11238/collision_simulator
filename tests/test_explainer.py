@@ -177,5 +177,67 @@ class ExplainerTest(unittest.TestCase):
             model.impact_explainer.draw(surface, pygame.Rect(38, 376, 730, 228))
 
 
+    def make_ready_model(self):
+        model = BallHitsRod()
+        model.set_control_value("vc", 3.0)
+        model.set_control_value("h", 0.72)
+        model.set_control_value("e", 0.6)
+        model.reset()
+        model.phase = "swinging"
+        model.theta = math.pi / 2.0
+        model.omega = model.target_omega
+        return model
+
+    def test_panel_toggle_defaults_on(self):
+        model = self.make_ready_model()
+        self.assertTrue(model.toggles["explain"].value)
+        self.assertTrue(model.explain_enabled)
+
+    def test_panel_toggle_click_disables_explanation(self):
+        model = self.make_ready_model()
+        toggle = model.toggles["explain"]
+        event = pygame.event.Event(pygame.MOUSEBUTTONDOWN,
+                                   pos=toggle.rect.center, button=1)
+
+        self.assertTrue(model.handle_toggles(event))
+        self.assertFalse(toggle.value)
+        self.assertFalse(model.explain_enabled)
+
+        # 开关关闭后碰撞直接提交，不再进入讲解冻结阶段。
+        model.begin_collision()
+        self.assertIsNone(model.impact_explainer)
+        self.assertEqual(model.phase, "after")
+
+        # 再次点击恢复开启，重新初始化后讲解随之恢复。
+        self.assertTrue(model.handle_toggles(event))
+        self.assertTrue(model.explain_enabled)
+        model.reset()
+        model.phase = "swinging"
+        model.theta = math.pi / 2.0
+        model.omega = model.target_omega
+        model.begin_collision()
+        self.assertIsNotNone(model.impact_explainer)
+        self.assertEqual(model.phase, "impact_explain")
+
+    def test_toggle_stays_in_sync_with_e_key(self):
+        model = self.make_ready_model()
+        model.toggle_explanation()
+        self.assertFalse(model.toggles["explain"].value)
+        self.assertFalse(model.explain_enabled)
+        model.toggle_explanation()
+        self.assertTrue(model.toggles["explain"].value)
+        self.assertTrue(model.explain_enabled)
+
+        # 面板开关关闭后按 E 重新开启，两边状态始终保持一致。
+        toggle = model.toggles["explain"]
+        event = pygame.event.Event(pygame.MOUSEBUTTONDOWN,
+                                   pos=toggle.rect.center, button=1)
+        model.handle_toggles(event)
+        self.assertFalse(model.explain_enabled)
+        model.toggle_explanation()
+        self.assertTrue(model.explain_enabled)
+        self.assertTrue(toggle.value)
+
+
 if __name__ == "__main__":
     unittest.main()

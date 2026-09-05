@@ -71,6 +71,9 @@ class BallHitsRod(BaseModel):
         self.add_control("e", "恢复系数 e", 1, 3, 0.00, 1.00, 1.00, "", 3)
         self.add_control("tau0", "恒定摩擦矩 τ0", 0, 4, 0.00, 0.500, 0.000, " N*m", 4)
 
+        # 慢放讲解开关：仅质点—细杆模型提供，控制碰撞瞬间是否冻结并慢放讲解。
+        self.add_toggle("explain", "慢放讲解", 1, 4, True)
+
         # h 仍然保留精确输入，但滑块用 h/L 表示，便于同时调整 L 和碰撞位置。
         self.input_boxes.pop("height_ratio")
         self.input_boxes["h"] = InputBox(
@@ -506,9 +509,17 @@ class BallHitsRod(BaseModel):
 
     def toggle_explanation(self):
         self.explain_enabled = not self.explain_enabled
+        if "explain" in self.toggles:
+            self.toggles["explain"].value = self.explain_enabled
         state = "开启" if self.explain_enabled else "关闭"
-        self.notice = f"碰撞讲解已{state}（E 切换）"
+        self.notice = f"慢放讲解已{state}（E 切换）"
         return self.explain_enabled
+
+    def on_toggle_changed(self, key, value):
+        if key == "explain":
+            self.explain_enabled = bool(value)
+            state = "开启" if value else "关闭"
+            self.notice = f"慢放讲解已{state}（面板开关）"
 
     def _legacy_do_collision(self):
         result = self.solve_collision()

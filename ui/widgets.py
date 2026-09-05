@@ -397,3 +397,53 @@ class InputBox:
         if self.unit:
             draw_text(surface, self.unit,
                       (self.rect.right + 5, self.rect.y + 6), FONT_TINY, MUTED)
+
+
+@dataclass
+class Toggle:
+    """参数面板用滑动开关：胶囊轨道 + 圆形旋钮，点击切换布尔状态。"""
+
+    x: int
+    y: int
+    value: bool = True
+
+    track_w: int = 46
+    track_h: int = 22
+    _hover: bool = field(default=False, init=False, repr=False)
+
+    def __post_init__(self):
+        self.rect = pygame.Rect(int(self.x), int(self.y), self.track_w,
+                                self.track_h)
+
+    def set_rect(self, x, y):
+        """响应式重排：更新开关位置（尺寸固定）。"""
+        self.x = int(x)
+        self.y = int(y)
+        self.rect = pygame.Rect(self.x, self.y, self.track_w, self.track_h)
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.rect.inflate(8, 12).collidepoint(event.pos):
+                self.value = not self.value
+                return True
+        return False
+
+    def draw(self, surface):
+        self._hover = self.rect.collidepoint(pygame.mouse.get_pos())
+        if self.value:
+            track, border, knob = (34, 96, 84), (96, 210, 170), ACCENT_3
+        elif self._hover:
+            track, border, knob = (40, 52, 88), (95, 115, 160), (120, 140, 180)
+        else:
+            track, border, knob = (26, 34, 58), (70, 86, 128), (100, 118, 160)
+
+        rounded_rect(surface, self.rect, track, self.track_h // 2, 1, border)
+        knob_x = (self.rect.right - self.track_h // 2 if self.value
+                  else self.rect.x + self.track_h // 2)
+        pygame.draw.circle(surface, (6, 12, 26),
+                           (knob_x + 1, self.rect.centery + 1), 8)
+        pygame.draw.circle(surface, knob, (knob_x, self.rect.centery), 8)
+
+        state = "开" if self.value else "关"
+        draw_text(surface, state, (self.rect.right + 10, self.rect.y + 3),
+                  FONT_TINY, ACCENT_3 if self.value else MUTED)
