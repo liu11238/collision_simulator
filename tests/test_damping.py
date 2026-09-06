@@ -19,8 +19,13 @@ from models.ball_rod import BallHitsRod  # noqa: E402
 class FrictionTest(unittest.TestCase):
     def make_model(self, **values):
         model = BallHitsRod()
+        # 旧参数 vc 表示碰撞点线速度：其余参数就位后按最终 h 换算成目标
+        # 角速度 omega_c，保持既有场景与断言的数值不变。
+        vc = values.pop("vc", None)
         for key, value in values.items():
             model.set_control_value(key, value)
+        if vc is not None:
+            model.set_control_value("omega_c", vc / model.current_h())
         model.reset()
         return model
 

@@ -24,8 +24,8 @@ from presentation.collision_explainer import CollisionExplainer  # noqa: E402
 class ExplainerTest(unittest.TestCase):
     def make_model(self):
         model = BallHitsRod()
-        model.set_control_value("vc", 3.0)
         model.set_control_value("h", 0.72)
+        model.set_control_value("omega_c", 3.0 / 0.72)
         model.set_control_value("e", 0.6)
         model.reset()
         model.phase = "swinging"
@@ -161,8 +161,8 @@ class ExplainerTest(unittest.TestCase):
     def test_headless_scene_and_explainer_draw(self):
         app = App()
         model = app.models[1]
-        model.set_control_value("vc", 3.0)
         model.set_control_value("h", 0.72)
+        model.set_control_value("omega_c", 3.0 / 0.72)
         model.reset()
         model.phase = "swinging"
         model.theta = math.pi / 2.0
@@ -179,8 +179,8 @@ class ExplainerTest(unittest.TestCase):
 
     def make_ready_model(self):
         model = BallHitsRod()
-        model.set_control_value("vc", 3.0)
         model.set_control_value("h", 0.72)
+        model.set_control_value("omega_c", 3.0 / 0.72)
         model.set_control_value("e", 0.6)
         model.reset()
         model.phase = "swinging"

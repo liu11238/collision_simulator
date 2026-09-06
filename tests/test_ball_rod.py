@@ -22,8 +22,13 @@ from models.ball_ball import BallBallCollision  # noqa: E402
 class BallRodTest(unittest.TestCase):
     def make_model(self, **values):
         model = BallHitsRod()
+        # 旧参数 vc 表示碰撞点线速度：其余参数就位后按最终 h 换算成目标
+        # 角速度 omega_c，保持既有场景与断言的数值不变。
+        vc = values.pop("vc", None)
         for key, value in values.items():
             model.set_control_value(key, value)
+        if vc is not None:
+            model.set_control_value("omega_c", vc / model.current_h())
         model.reset()
         return model
 
@@ -215,6 +220,21 @@ class BallRodTest(unittest.TestCase):
             model.step(model.TRAIL_LIFETIME / 60.0)
         self.assertFalse(model.rod_trail)
 
+
+    def test_target_control_is_angular_velocity(self):
+        model = self.make_model(h=0.8, omega_c=5.0)
+        self.assertAlmostEqual(model.target_angular_speed(), 5.0, places=12)
+        self.assertAlmostEqual(model.target_collision_speed(), 4.0, places=12)
+
+        # h 改变时角速度不变，碰撞点线速度按 h 缩放。
+        model.set_control_value("h", 0.4)
+        self.assertAlmostEqual(model.target_angular_speed(), 5.0, places=12)
+        self.assertAlmostEqual(model.target_collision_speed(), 2.0, places=12)
+
+        # 旧参数名 vc（碰撞点线速度）按当前 h 换算成角速度。
+        model.set_control_value("vc", 3.0)
+        self.assertAlmostEqual(model.target_angular_speed(), 7.5, places=12)
+        self.assertAlmostEqual(model.target_collision_speed(), 3.0, places=12)
 
 if __name__ == "__main__":
     unittest.main()

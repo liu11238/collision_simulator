@@ -62,7 +62,7 @@ class BallHitsRod(BaseModel):
     def build_controls(self):
         self.add_control("m", "小球质量 m", 0, 0, 0.05, 10.0, 1.00, " kg", 3)
         self.add_control("M", "杆质量 M", 0, 1, 0.10, 20.0, 4.00, " kg", 3)
-        self.add_control("vc", "目标碰撞点速率 vc", 0, 2, 0.00, 30.0, 3.00, " m/s", 3)
+        self.add_control("omega_c", "目标角速度 ωc", 0, 2, 0.00, 20.00, 4.00, " rad/s", 3)
         self.add_control("g", "重力加速度 g", 0, 3, 0.00, 25.0, 9.80, " m/s^2", 3)
 
         self.add_control("L", "杆长 L", 1, 0, 0.25, 2.00, 1.00, " m", 3)
@@ -87,7 +87,7 @@ class BallHitsRod(BaseModel):
         return {
             "m": self.sliders["m"].value,
             "M": self.sliders["M"].value,
-            "vc": self.sliders["vc"].value,
+            "omega_c": self.sliders["omega_c"].value,
             "g": self.sliders["g"].value,
             "L": self.sliders["L"].value,
             "h": self.current_h(),
@@ -101,6 +101,11 @@ class BallHitsRod(BaseModel):
         # 已经改为恒定摩擦矩，不再执行 tau=-b*omega。
         if key == "b":
             key = "tau0"
+        if key == "vc":
+            # vc 是上一版本的参数名（碰撞点线速度）；按当前碰撞高度
+            # 换算为目标角速度 omega_c。
+            key = "omega_c"
+            value = value / max(self.EPS, self.current_h())
         if key == "L":
             old_h = self.current_h()
             self.sliders["L"].set_value(value)
@@ -255,21 +260,22 @@ class BallHitsRod(BaseModel):
     # 这个别名便于展示层和旧的教学文案使用更直观的名称。
     center_of_percussion = percussion_center
 
-    def target_collision_speed(self):
-        """目标为碰撞点（距转轴 h 处）的线速度，单位 m/s。"""
-        return self.sliders["vc"].value
-
     def target_angular_speed(self):
-        h = self.current_h()
-        if h <= self.EPS:
+        """目标角速度 ωc（面板直接输入），单位 rad/s。"""
+        if self.current_h() <= self.EPS:
+            # 无有效碰撞点时保持杆静止，与旧的 vc/h 行为一致。
             return 0.0
-        return self.target_collision_speed() / h
+        return self.sliders["omega_c"].value
+
+    def target_collision_speed(self):
+        """碰撞点（距转轴 h 处）的目标线速度 v = ωc·h，单位 m/s。"""
+        return self.target_angular_speed() * self.current_h()
 
     def compute_launch_state(self):
-        """由目标碰撞速度反解初始摆角和初始角速度。
+        """由目标角速度反解初始摆角和初始角速度。
 
         杆从 ``theta_start`` 摆到竖直位置 ``pi/2``。重力释放能够提供的
-        最大角速度对应 ``theta_start=0``；若目标速度超过该值，则从 90
+        最大角速度对应 ``theta_start=0``；若目标角速度超过该值，则从 90
         度摆角出发并补充初始角速度。
         """
         L = self.sliders["L"].value
@@ -281,7 +287,7 @@ class BallHitsRod(BaseModel):
         target_omega_sq = target_omega * target_omega
 
         if target_omega <= self.EPS:
-            # 目标速度为零时，杆直接处于竖直最低位置；g=0 也需要这个
+            # 目标角速度为零时，杆直接处于竖直最低位置；g=0 也需要这个
             # 特殊分支，否则通用的“90°出发”状态永远不会到达碰撞位置。
             theta_start = math.pi / 2.0
             omega_start = 0.0
@@ -394,7 +400,7 @@ class BallHitsRod(BaseModel):
         self.uses_initial_speed = launch["uses_initial_speed"]
         self.initial_energy = self.mechanical_energy()
 
-        # 小球静止在碰撞位置；vc 只表示杆的碰撞点速度，不是小球入射速度。
+        # 小球静止在碰撞位置；vc=ωc·h 只表示杆的碰撞点速度，不是小球入射速度。
         self.ball_x = 0.0
         self.ball_v = 0.0
         self.t = 0.0
