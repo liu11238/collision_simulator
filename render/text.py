@@ -10,7 +10,7 @@ import contextlib
 
 import pygame
 
-from core.fonts import get_font
+from core.fonts import get_font, render_text, text_width
 
 # CJK 文本允许的额外断行点（英文默认可在空格处断行）。
 CJK_BREAK_CHARS = "，。；：、（）【】《》！？+-=→*/%±"
@@ -20,7 +20,7 @@ def measure_text(text, font) -> tuple[int, int]:
     """返回文本在指定字体下的 (宽, 高)。"""
     if not text:
         return 0, font.get_height()
-    return font.size(str(text))
+    return text_width(str(text), font), font.get_height()
 
 
 def ellipsize_text(text, font, max_width: int) -> str:
@@ -28,16 +28,16 @@ def ellipsize_text(text, font, max_width: int) -> str:
     text = str(text)
     if max_width <= 0:
         return ""
-    if font.size(text)[0] <= max_width:
+    if text_width(text, font) <= max_width:
         return text
     ellipsis = "…"
-    if font.size(ellipsis)[0] > max_width:
+    if text_width(ellipsis, font) > max_width:
         return ""
     # 二分查找可保留的最大前缀。
     low, high = 0, len(text)
     while low < high:
         mid = (low + high + 1) // 2
-        if font.size(text[:mid] + ellipsis)[0] <= max_width:
+        if text_width(text[:mid] + ellipsis, font) <= max_width:
             low = mid
         else:
             high = mid - 1
@@ -49,12 +49,12 @@ def clip_text(text, font, max_width: int) -> str:
     text = str(text)
     if max_width <= 0:
         return ""
-    if font.size(text)[0] <= max_width:
+    if text_width(text, font) <= max_width:
         return text
     low, high = 0, len(text)
     while low < high:
         mid = (low + high + 1) // 2
-        if font.size(text[:mid])[0] <= max_width:
+        if text_width(text[:mid], font) <= max_width:
             low = mid
         else:
             high = mid - 1
@@ -68,14 +68,14 @@ def fit_text(text, font, max_width: int, overflow: str = "ellipsis"):
     字号再省略；其他值按 ``ellipsis`` 处理。
     """
     text = str(text)
-    if max_width is None or font.size(text)[0] <= max_width:
+    if max_width is None or text_width(text, font) <= max_width:
         return text, font
     if overflow == "shrink":
         size = font.get_height()
         while size > 8:
             size -= 1
             smaller = get_font(size, font.get_bold())
-            if smaller.size(text)[0] <= max_width:
+            if text_width(text, smaller) <= max_width:
                 return text, smaller
         font = get_font(8, font.get_bold())
     if overflow == "clip":
@@ -93,7 +93,7 @@ def wrap_chinese_text(text, font, max_width: int) -> list[str]:
         current = ""
         for char in paragraph:
             candidate = current + char
-            if current and font.size(candidate)[0] > max_width:
+            if current and text_width(candidate, font) > max_width:
                 if current[-1] in CJK_BREAK_CHARS or char == " ":
                     lines.append(current)
                     current = char if char != " " else ""
@@ -121,7 +121,7 @@ def draw_text_box(surface, rect, lines, font, color, line_gap=4,
             if y + font.get_height() > rect.bottom:
                 break
             text, used_font = fit_text(line, font, rect.w, overflow)
-            img = used_font.render(text, True, color)
+            img = render_text(text, used_font, color)
             if align == "center":
                 pos = (rect.centerx - img.get_width() // 2, y)
             elif align == "right":
@@ -156,13 +156,13 @@ def draw_value_unit(surface, right_x, y, value, unit="", font=None,
     """右对齐的“数值 + 单位”两列绘制；返回整体矩形。"""
     unit = str(unit).strip()
     value_text = format_measurement(value)
-    unit_img = font.render(unit, True, unit_color) if unit else None
+    unit_img = render_text(unit, font, unit_color) if unit else None
     unit_w = unit_img.get_width() + 2 if unit_img else 0
 
     value_max = max_width - unit_w if max_width else None
     value_text, used_font = fit_text(value_text, font, value_max, "shrink") \
         if value_max else (value_text, font)
-    value_img = used_font.render(value_text, True, value_color)
+    value_img = render_text(value_text, used_font, value_color)
 
     total_w = value_img.get_width() + unit_w
     x = right_x - total_w

@@ -9,13 +9,12 @@ from collections import OrderedDict
 import pygame
 
 from config import BG_BOTTOM, BG_MID, BG_TOP, TEXT
-from core.fonts import FONT
+from core.fonts import FONT, render_text
 from render.text import fit_text
 from utils import clamp, lerp, lerp_color
 
 
 _CACHE_LIMIT = 2048
-_TEXT_CACHE = OrderedDict()
 _SPACED_TEXT_CACHE = OrderedDict()
 _GRADIENT_CACHE = OrderedDict()
 
@@ -29,14 +28,8 @@ def _cache_put(cache, key, value):
 
 
 def _cached_text_image(text, font, color):
-    key = (id(font), str(text), tuple(color))
-    image = _TEXT_CACHE.get(key)
-    if image is None:
-        image = font.render(str(text), True, color)
-        return _cache_put(_TEXT_CACHE, key, image)
-
-    _TEXT_CACHE.move_to_end(key)
-    return image
+    """渲染文本表面；缺字形回退与 LRU 缓存委托给 core.fonts.render_text。"""
+    return render_text(text, font, color)
 
 
 def draw_text(surface, text, pos, font=FONT, color=TEXT, anchor="topleft",
