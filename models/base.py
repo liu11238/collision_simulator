@@ -485,7 +485,11 @@ class BaseModel:
         metrics = LAYOUT.metrics
         formula_rect = pygame.Rect(LAYOUT.formula)
         body_font = font(metrics.small_font_size)
-        line_h = body_font.get_height() + 4
+        size = metrics.small_font_size
+        while body_font.get_height() * 2 > formula_rect.h and size > 6:
+            size -= 1
+            body_font = font(size)
+        line_h = formula_rect.h // 2
         line_1, line_2 = self.formula_lines()
         draw_text(screen, line_1, formula_rect.topleft, body_font, ACCENT_2,
                   max_width=formula_rect.w)
@@ -501,9 +505,9 @@ class BaseModel:
         # 标题采用逐字绘制，确保中文字符之间有明显的横向间距。
         screen = display.screen
         metrics = LAYOUT.metrics
-        title_font = font(metrics.title_font_size, True)
+        title_font = font(min(metrics.title_font_size, max(18, (LAYOUT.header_h - 30) // 2)), True)
         title = draw_spaced_text(
-            screen, self.name, (24, 8), title_font, TEXT,
+            screen, self.name, (24, 2), title_font, TEXT,
             spacing=TITLE_LETTER_SPACING
         )
         draw_horizontal_gradient_line(screen, 24, title.bottom + 3,

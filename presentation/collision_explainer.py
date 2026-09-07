@@ -383,27 +383,17 @@ class CollisionExplainer:
 
     def draw(self, surface, rect):
         """将当前讲解阶段绘制为过程图。"""
-        rect = pygame.Rect(rect)
-        rounded_rect(surface, rect, (8, 13, 29), 16, 2, (100, 145, 220))
-        draw_text(surface, "碰撞过程重演", (rect.x + 18, rect.y + 12), FONT_BIG, TEXT)
-        draw_text(surface, "Space 跳过本次讲解", (rect.right - 18, rect.y + 18),
-                  FONT_SMALL, ACCENT_2, anchor="topright")
-        labels = ("① 速度交换", "② 角动量", "③ 能量流")
-        for index, label in enumerate(labels):
-            color = ACCENT_3 if index == self.phase_index else MUTED
-            card_x = rect.x + 176 + index * 80
-            card = pygame.Rect(card_x, rect.y + 10, 76, 27)
-            rounded_rect(surface, card, (24, 35, 62), 7, 1, color)
-            draw_text(surface, label, card.center, FONT_TINY, color, anchor="center")
-        pygame.draw.rect(surface, (30, 43, 72),
-                         (rect.x + 18, rect.y + 43, rect.w - 36, 4), border_radius=2)
-        progress_w = int((rect.w - 36) * clamp(self.elapsed / self.total_duration, 0.0, 1.0))
-        pygame.draw.rect(surface, ACCENT_3,
-                         (rect.x + 18, rect.y + 43, progress_w, 4), border_radius=2)
-
-        if self.phase == "velocity":
-            self._draw_velocity(surface, rect)
-        elif self.phase == "momentum":
-            self._draw_momentum(surface, rect)
-        else:
-            self._draw_energy(surface, rect)
+        from presentation.impact_panel import draw_impact_panel
+        s = self.snapshot
+        draw_impact_panel(surface, rect, self.elapsed, self.PHASE_DURATION,
+            [('杆接触点 hω', s.contact_before, s.contact_after),
+             ('小球 v', s.u_before, s.v_after)],
+            ['接触冲量改变球速，同时改变杆的转速',
+             f'小球获得冲量 J = {format_sig3(s.impulse)} N·s',
+             '杆受到反向冲量；绕轴总角动量守恒',
+             f'总角动量：{format_sig3(s.total_L_before)} → {format_sig3(s.total_L_after)}',
+             '定轴有外力：球杆总线动量不必守恒'],
+            ['碰前动能 = 碰后动能 + 碰撞耗散',
+             f'总动能：{format_sig3(s.ke_before)} → {format_sig3(s.ke_after)} J',
+             f'碰撞耗散：{format_sig3(s.collision_energy_loss)} J',
+             'e=1 时完全弹性；e<1 时部分机械能耗散'])

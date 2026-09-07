@@ -24,7 +24,7 @@ def _segments(state):
             ("摩擦热", state.friction_heat, FRICTION_HEAT))
 
 
-def draw_energy_ledger(surface, rect, account, snapshot=None, title=None):
+def draw_energy_ledger(surface, rect, account, snapshot=None, title=None, kinetic_labels=None):
     """绘制能量组成、总账本和闭合残差。"""
     state = EnergyState.from_account(account)
     rect = pygame.Rect(rect)
@@ -60,6 +60,8 @@ def draw_energy_ledger(surface, rect, account, snapshot=None, title=None):
         meter_x = rect.x + label_w
         meter_w = max(20, rect.w - label_w - value_w - 6)
         for label, value, color in _segments(state):
+            if kinetic_labels and label in ('杆动能', '球动能'):
+                label = kinetic_labels[0 if label == '杆动能' else 1]
             if y + line_h > rect.bottom - line_h * 2:
                 break
             draw_text(surface, label, (rect.x, y), body, color,

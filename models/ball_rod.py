@@ -515,6 +515,8 @@ class BallHitsRod(BaseModel):
 
     def toggle_explanation(self):
         self.explain_enabled = not self.explain_enabled
+        if not self.explain_enabled:
+            self.skip_explanation()
         if "explain" in self.toggles:
             self.toggles["explain"].value = self.explain_enabled
         state = "开启" if self.explain_enabled else "关闭"
@@ -524,6 +526,8 @@ class BallHitsRod(BaseModel):
     def on_toggle_changed(self, key, value):
         if key == "explain":
             self.explain_enabled = bool(value)
+            if not value:
+                self.skip_explanation()
             state = "开启" if value else "关闭"
             self.notice = f"慢放讲解已{state}（面板开关）"
 
@@ -890,6 +894,7 @@ class BallHitsRod(BaseModel):
         )
         scale = physical_scale_ratio * old_scale
         pivot = (LAYOUT.scene_x + int(LAYOUT.scene_w * 0.63), LAYOUT.scene_y + int(LAYOUT.scene_h * 0.30))
+        scale = min(scale, max(1.0, (LAYOUT.scene_y + LAYOUT.scene_h - pivot[1] - 30) / L))
 
         explainer = (
             self.impact_explainer
@@ -941,7 +946,8 @@ class BallHitsRod(BaseModel):
         else:
             display_account = self.energy_breakdown()
 
-        zoom = self.camera_zoom if explainer is not None else 1.0
+        # A stable full-rod view keeps the pivot, tip and contact visible.
+        zoom = 1.0
         if zoom > 1.0 and self.camera_focus is not None:
             focus_x, focus_y = self.camera_focus
             focus_screen = (pivot[0], LAYOUT.scene_y + int(LAYOUT.scene_h * 0.88))
@@ -1125,13 +1131,14 @@ class BallHitsRod(BaseModel):
             display.trail_surf_2.fill((0, 0, 0, 0))
             for i, (bx, by) in enumerate(display_ball_trail):
                 p = i / max(1, len(display_ball_trail) - 1)
-                pos = w2s(bx, by)
+                raw_pos = w2s(bx, by)
+                pos = (raw_pos[0] + max(12, int(rb * scale)) + (rod_w + 1) // 2, raw_pos[1])
                 if -100 <= pos[0] <= LAYOUT.width + 100:
                     r = max(2, int(rb * scale * (0.22 + 0.40 * p)))
                     pygame.draw.circle(display.trail_surf_2, (*BALL1_GLOW, int(12 + 75 * p)), pos, r + 3)
             display.screen.blit(display.trail_surf_2, (0, 0))
 
-        if not replay_active and (self.particles or self.shockwaves):
+        if not replay_active and not explainer and (self.particles or self.shockwaves):
             display.particle_surf.fill((0, 0, 0, 0))
             for particle in self.particles:
                 particle.draw(display.particle_surf, w2s, streak_scale=scale * 0.08)
@@ -1139,8 +1146,11 @@ class BallHitsRod(BaseModel):
                 wave.draw(display.particle_surf, w2s, scale)
             display.screen.blit(display.particle_surf, (0, 0))
 
-        ball_pos = w2s(display_ball_x, h)
         br = max(12, int(rb * scale))
+        # ball_x is displacement from impact, not the rendered sphere centre.
+        # Offset the centre by its radius and half the visible rod thickness.
+        raw_ball_pos = w2s(display_ball_x, h)
+        ball_pos = (raw_ball_pos[0] + br + (rod_w + 1) // 2, raw_ball_pos[1])
         pygame.draw.ellipse(display.screen, (0, 0, 0),
                             (ball_pos[0] - br - 4, sy - max(3, br // 4),
                              2 * br + 8, max(6, br // 2)))
@@ -1157,7 +1167,7 @@ class BallHitsRod(BaseModel):
                            (ball_pos[0] - br // 3 - 1, ball_pos[1] - br // 3 - 1),
                            max(2, br // 7))
 
-        if not replay_active and self.flash > 0:
+        if not replay_active and not explainer and self.flash > 0:
             contact = w2s(0.0, h)
             display.flash_surf.fill((0, 0, 0, 0))
             f = self.flash

@@ -34,6 +34,7 @@ class BallBallCollision(BaseModel):
         self.add_control("u2", "右球初速度 u2", 1, 1, -12.0, 12.0, 0.00, " m/s", 3)
         self.add_control("e", "恢复系数 e", 1, 2, 0.00, 1.00, 1.00, "", 3)
         self.add_control("anim_speed", "动画速度", 1, 3, 0.20, 2.50, 1.00, "x", 2)
+        self.add_toggle("explain", "慢放讲解", 0, 3, True)
 
 
     def reset(self, keep_running=False):
@@ -43,6 +44,7 @@ class BallBallCollision(BaseModel):
         r = self.BALL_RADIUS_WORLD
         self.running = keep_running
         self.phase = "ready"
+        self.explain_elapsed = 0.0
 
         self.x1 = -gap / 2.0 - r
         self.x2 = gap / 2.0 + r
@@ -64,6 +66,9 @@ class BallBallCollision(BaseModel):
         return self.v1 > self.v2 + 1e-10
 
     def start_pause(self):
+        if self.phase == "impact_explain":
+            self.phase = "after"
+            return
         if self.phase == "ready":
             self.phase = "moving"
 
@@ -72,6 +77,12 @@ class BallBallCollision(BaseModel):
         self.running = not self.running
 
     def jump_to_collision(self):
+        if self.phase == "impact_explain":
+            self.phase = "after"
+            return
+        if self.collided:
+            self.notice = "本次碰撞已完成；按 R 重置后可重新讲解。"
+            return
         if not self.can_collide():
             self.phase = "moving"
             self.running = False
@@ -128,6 +139,19 @@ class BallBallCollision(BaseModel):
         }
         spawn_impact_particles(self.particles, self.shockwaves, contact_x, 0.0,
                                relative_before, symmetric=True)
+        if self.toggles['explain'].value:
+            self.phase = 'impact_explain'
+            self.explain_elapsed = 0.0
+
+    def toggle_explanation(self):
+        toggle = self.toggles['explain']
+        toggle.value = not toggle.value
+        self.on_toggle_changed('explain', toggle.value)
+        return toggle.value
+
+    def on_toggle_changed(self, key, value):
+        if key == 'explain' and not value and self.phase == 'impact_explain':
+            self.phase = 'after'
 
     def energy_state_for_display(self):
         m1 = self.sliders["m1"].value
@@ -147,7 +171,8 @@ class BallBallCollision(BaseModel):
                            residual=initial - mechanical - loss)
 
     def draw_energy_panel(self, rect):
-        draw_energy_ledger(display.screen, rect, self.energy_state_for_display())
+        draw_energy_ledger(display.screen, rect, self.energy_state_for_display(),
+                           kinetic_labels=('左球动能', '右球动能'))
 
 
     def _advance_simulation_substep(self, sub):
@@ -169,15 +194,22 @@ class BallBallCollision(BaseModel):
     def step(self, dt):
         if not self.running:
             return
+        if self.phase == 'impact_explain':
+            self.explain_elapsed += max(0.0, dt)
+            if self.explain_elapsed >= 9.0:
+                self.phase = 'after'
+            return
         speed = self.sliders["anim_speed"].value
         sim_dt = dt * speed
-        self.t += sim_dt
         # 使用 ceil 保证每一个物理子步都不超过 MAX_SUBSTEP。
         n = max(1, math.ceil(sim_dt / self.MAX_SUBSTEP))
 
         sub = sim_dt / n
         for _ in range(n):
+            self.t += sub
             self._advance_simulation_substep(sub)
+            if self.phase == 'impact_explain':
+                break
 
 
         self.step_particles(dt, gravity=0.0)
@@ -200,7 +232,7 @@ class BallBallCollision(BaseModel):
         return pygame.Rect(LAYOUT.formula)
 
     def interface_state(self):
-        return ({"ready": "待开始", "moving": "两球运动中", "after": "碰撞后运动"}
+        return ({"ready": "待开始", "moving": "两球运动中", "after": "碰撞后运动", "impact_explain": "慢放讲解（物理冻结）"}
                 .get(self.phase, self.phase), self.t)
 
     def summary_line(self):
@@ -215,6 +247,22 @@ class BallBallCollision(BaseModel):
 
     def draw_analysis_panel(self, rect):
         rect = pygame.Rect(rect)
+        if self.last_result:
+            from presentation.impact_panel import draw_impact_panel
+            r = self.last_result
+            draw_impact_panel(display.screen, rect,
+                self.explain_elapsed if self.phase == 'impact_explain' else 0.0, 3.0,
+                [('左球', r['u1'], r['v1']), ('右球', r['u2'], r['v2'])],
+                ['两球受到大小相等、方向相反的冲量',
+                 f'左球冲量：{format_sig3(r["impulse"])} N·s',
+                 f'右球冲量：{format_sig3(-r["impulse"])} N·s',
+                 f'总动量：{format_sig3(r["p_before"])} → {format_sig3(r["p_after"])} kg·m/s',
+                 '只有等质量且 e=1 时才直接交换速度'],
+                ['碰前动能 = 碰后动能 + 碰撞耗散',
+                 f'动能：{format_sig3(r["ke_before"])} → {format_sig3(r["ke_after"])} J',
+                 f'耗散：{format_sig3(r["collision_energy_loss"])} J',
+                 '讲解结束后自动继续运动'])
+            return
         draw_text(display.screen, self.summary_line(), (rect.x + 2, rect.y + 2),
                   FONT_TINY, MUTED, max_width=rect.w - 4)
 
@@ -302,7 +350,7 @@ class BallBallCollision(BaseModel):
 
             display.screen.blit(display.trail_surf_2, (0, 0))
 
-        if self.particles or self.shockwaves:
+        if self.phase != 'impact_explain' and (self.particles or self.shockwaves):
             display.particle_surf.fill((0, 0, 0, 0))
             for particle in self.particles:
                 particle.draw(display.particle_surf, w2s, streak_scale=5.5)
@@ -329,8 +377,10 @@ class BallBallCollision(BaseModel):
 
             pygame.draw.circle(display.screen, (255, 255, 255),
                                (px - radius // 3 - 1, py - radius // 3 - 1), max(2, radius // 8))
-            draw_text(display.screen, label, (px, py - radius - 38), FONT_BIG, edge_color, anchor="midbottom")
-            draw_text(display.screen, f"m={format_sig3(mass)} kg", (px, py + radius + 18), FONT_SMALL, MUTED, anchor="midtop")
+            label_x = px - 18 if label == '球 1' else px + 18
+            draw_text(display.screen, label, (label_x, py - radius - 38), FONT_SMALL, edge_color, anchor="midbottom")
+            draw_text(display.screen, f"m={format_sig3(mass)} kg", (px, py + radius + 18), FONT_TINY, MUTED,
+                      anchor="topright" if label == '球 1' else "topleft")
 
         pos1, pos2 = w2s(self.x1), w2s(self.x2)
         draw_ball(pos1, radius_px, BALL1_COLOR, BALL1_EDGE, BALL1_GLOW, "球 1", m1)
@@ -356,7 +406,7 @@ class BallBallCollision(BaseModel):
         draw_velocity(pos2, self.v2, "v2")
 
 
-        if self.flash > 0 and self.last_result:
+        if self.phase != 'impact_explain' and self.flash > 0 and self.last_result:
             contact = w2s(self.last_result["contact_x"])
             display.flash_surf.fill((0, 0, 0, 0))
             f = self.flash
