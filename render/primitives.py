@@ -192,3 +192,18 @@ def _sphere(radius, color):
 def draw_matte_ball(surface, pos, radius, color):
     image = _sphere(int(radius), tuple(color))
     surface.blit(image, (pos[0]-radius-2, pos[1]-radius-2))
+
+
+def draw_soft_shadow(surface, rect, alpha=72):
+    """Draw a real alpha-blended, feathered contact shadow."""
+    rect = pygame.Rect(rect)
+    pad = 8
+    layer = pygame.Surface((rect.w + pad * 2, rect.h + pad * 2),
+                           pygame.SRCALPHA)
+    center = (layer.get_width() // 2, layer.get_height() // 2)
+    for grow, opacity in ((6, alpha // 5), (3, alpha // 3), (0, alpha)):
+        shadow_rect = pygame.Rect(0, 0, rect.w + grow * 2,
+                                  rect.h + max(2, grow))
+        shadow_rect.center = center
+        pygame.draw.ellipse(layer, (3, 9, 8, opacity), shadow_rect)
+    surface.blit(layer, (rect.x - pad, rect.y - pad))

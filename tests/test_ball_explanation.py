@@ -13,6 +13,7 @@ class ExplanationTests(unittest.TestCase):
 
     def test_freeze_and_resume(self):
         model = BallBallCollision()
+        model.toggle_explanation()
         model.jump_to_collision()
         state = (model.x1, model.x2, model.v1, model.v2, model.t)
         self.assertEqual(model.phase, 'impact_explain')
@@ -29,12 +30,18 @@ class ExplanationTests(unittest.TestCase):
         a.jump_to_collision()
         b.jump_to_collision()
         self.assertEqual(a.last_result, b.last_result)
-        self.assertEqual(b.phase, 'after')
-        a.toggle_explanation()
         self.assertEqual(a.phase, 'after')
+        self.assertEqual(b.phase, 'impact_explain')
+        b.toggle_explanation()
+        self.assertEqual(b.phase, 'after')
 
     def test_rod_disable_commits(self):
         model = BallHitsRod()
+        model.toggle_explanation()
         model.begin_collision()
         model.toggle_explanation()
         self.assertEqual(model.phase, 'after')
+
+    def test_explanation_defaults_off_for_both_models(self):
+        for model in (BallBallCollision(), BallHitsRod()):
+            self.assertFalse(model.toggles['explain'].value)

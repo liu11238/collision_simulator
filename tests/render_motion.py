@@ -34,8 +34,11 @@ def render_motion(destination, fps=30):
             app.switch_mode(index)
             model = app.model
             model.reset()
+            if not model.toggles["explain"].value:
+                model.toggle_explanation()
             # Include normal view, the full explanation, and automatic resume.
             for _ in range(fps // 2):
+                model.update_inputs(1 / fps)
                 display.advance_ambience(1 / fps)
                 display.begin_frame()
                 model.draw_scene()
@@ -44,6 +47,7 @@ def render_motion(destination, fps=30):
             model.start_pause()
             after_frames = 0
             for _ in range(20 * fps):
+                model.update_inputs(1 / fps)
                 model.step(1 / fps)
                 display.advance_ambience(1 / fps)
                 display.begin_frame()

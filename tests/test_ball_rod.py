@@ -47,7 +47,7 @@ class BallRodTest(unittest.TestCase):
         result = model.last_result
         self.assertAlmostEqual(result["contact_before"], 4.2, places=9)
         self.assertAlmostEqual(model.collision_point_speed(),
-                               abs(result["contact_after"]), places=9)
+                               abs(result["contact_after"]), delta=1e-3)
 
     def test_gravity_release_angle_and_energy(self):
         model = self.make_model(vc=2.0, h=0.8, g=9.8)

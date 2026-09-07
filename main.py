@@ -49,7 +49,11 @@ class App:
             pygame.Rect(x + start_w + gap + reset_w + gap, action.y,
                         snap_w, action.h))
 
-        self.btn_sound = Button("声音 关  M", pygame.Rect(tabs.x - 122, tabs.y + 4, 110, tabs.h - 8))
+        sound_label = (("声音 开  M" if self.sound.enabled else "声音 关  M")
+                       if self.sound.available else "声音不可用")
+        self.btn_sound = Button(sound_label,
+                                pygame.Rect(tabs.x - 122, tabs.y + 4,
+                                            110, tabs.h - 8))
 
         tab_w = min(240, (tabs.w - 12) // 2)
         self.mode_buttons = [
@@ -77,6 +81,7 @@ class App:
                 box.dragging = False
             self.model.running = False
             self.mode_index = index
+            self.model.ui_reveal = 0.0
             for box in self.model.input_boxes.values():
                 box.active = False
                 box.dragging = False

@@ -10,7 +10,7 @@ from config import (ACCENT, ACCENT_2, ACCENT_3, INPUT_ACTIVE, INPUT_BG,
                     INPUT_BORDER, MUTED, RED, SELECT_BG, TEXT)
 from core.fonts import FONT_SMALL, FONT_TINY
 from render.primitives import draw_text, rounded_rect
-from utils import clamp, format_num, format_sig3
+from utils import clamp, format_num, format_sig3, lerp_color
 
 @dataclass
 class Slider:
@@ -183,6 +183,9 @@ class Button:
     text: str
     rect: pygame.Rect
     _hover: bool = field(default=False, init=False, repr=False)
+    _hover_t: float = field(default=0.0, init=False, repr=False)
+    _active_t: float = field(default=0.0, init=False, repr=False)
+    _press_t: float = field(default=0.0, init=False, repr=False)
 
     def set_rect(self, rect):
         """响应式重排：更新按钮矩形。"""
@@ -190,24 +193,38 @@ class Button:
 
     def draw(self, surface, active=False):
         self._hover = self.rect.collidepoint(pygame.mouse.get_pos())
-        if active:
-            bg, border, ink = (41, 64, 58), ACCENT, TEXT
-        elif self._hover:
-            bg, border, ink = (43, 62, 56), (114, 150, 132), TEXT
-        else:
-            bg, border, ink = (29, 43, 41), (65, 87, 77), MUTED
-        rounded_rect(surface, self.rect, bg, 9, 1, border)
-        if active:
+        self._hover_t += ((1.0 if self._hover else 0.0) - self._hover_t) * 0.18
+        self._active_t += ((1.0 if active else 0.0) - self._active_t) * 0.22
+        self._press_t *= 0.68
+        base_bg, base_border = (29, 43, 41), (65, 87, 77)
+        bg = lerp_color(base_bg, (43, 62, 56), self._hover_t)
+        border = lerp_color(base_border, (114, 150, 132), self._hover_t)
+        bg = lerp_color(bg, (41, 64, 58), self._active_t)
+        border = lerp_color(border, ACCENT, self._active_t)
+        ink = lerp_color(MUTED, TEXT, max(self._hover_t, self._active_t))
+        visual_rect = self.rect.move(0, int(round(self._press_t * 2)))
+        rounded_rect(surface, visual_rect, bg, 9, 1, border)
+        if self._hover_t > 0.01:
+            sheen_w = max(1, int((visual_rect.w - 24) * self._hover_t))
+            pygame.draw.line(surface, lerp_color(bg, TEXT, 0.22),
+                             (visual_rect.x + 12, visual_rect.y + 2),
+                             (visual_rect.x + 12 + sheen_w, visual_rect.y + 2), 1)
+        if self._active_t > 0.01:
+            indicator_w = int((visual_rect.w - 24) * self._active_t)
             pygame.draw.rect(surface, ACCENT,
-                             (self.rect.x + 12, self.rect.bottom - 3,
-                              self.rect.w - 24, 2), border_radius=1)
-        draw_text(surface, self.text, self.rect.center,
+                             (visual_rect.centerx - indicator_w // 2,
+                              visual_rect.bottom - 3, indicator_w, 2),
+                             border_radius=1)
+        draw_text(surface, self.text, visual_rect.center,
                   FONT_SMALL, ink, anchor="center", max_width=self.rect.w - 12)
 
     def clicked(self, event):
-        return (event.type == pygame.MOUSEBUTTONDOWN
-                and event.button == 1
-                and self.rect.collidepoint(event.pos))
+        hit = (event.type == pygame.MOUSEBUTTONDOWN
+               and event.button == 1
+               and self.rect.collidepoint(event.pos))
+        if hit:
+            self._press_t = 1.0
+        return hit
 
 
 class InputBox:
@@ -404,10 +421,12 @@ class Toggle:
     track_w: int = 46
     track_h: int = 22
     _hover: bool = field(default=False, init=False, repr=False)
+    _position: float = field(default=0.0, init=False, repr=False)
 
     def __post_init__(self):
         self.rect = pygame.Rect(int(self.x), int(self.y), self.track_w,
                                 self.track_h)
+        self._position = 1.0 if self.value else 0.0
 
     def set_rect(self, x, y):
         """响应式重排：更新开关位置（尺寸固定）。"""
@@ -424,16 +443,18 @@ class Toggle:
 
     def draw(self, surface):
         self._hover = self.rect.collidepoint(pygame.mouse.get_pos())
-        if self.value:
-            track, border, knob = (34, 96, 84), (96, 210, 170), ACCENT_3
-        elif self._hover:
-            track, border, knob = (42, 57, 54), (76, 104, 99), (170, 204, 198)
-        else:
-            track, border, knob = (27, 37, 35), (61, 83, 79), (76, 104, 99)
+        target = 1.0 if self.value else 0.0
+        self._position += (target - self._position) * 0.22
+        hover = 1.0 if self._hover else 0.0
+        track = lerp_color((27, 37, 35), (34, 96, 84), self._position)
+        border = lerp_color((61, 83, 79), (96, 210, 170), self._position)
+        knob = lerp_color((76, 104, 99), ACCENT_3, self._position)
+        track = lerp_color(track, (48, 68, 62), hover * (1.0 - self._position) * .5)
 
         rounded_rect(surface, self.rect, track, self.track_h // 2, 1, border)
-        knob_x = (self.rect.right - self.track_h // 2 if self.value
-                  else self.rect.x + self.track_h // 2)
+        left = self.rect.x + self.track_h // 2
+        right = self.rect.right - self.track_h // 2
+        knob_x = int(round(left + (right - left) * self._position))
         pygame.draw.circle(surface, (12, 16, 16),
                            (knob_x + 1, self.rect.centery + 1), 8)
         pygame.draw.circle(surface, knob, (knob_x, self.rect.centery), 8)

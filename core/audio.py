@@ -26,6 +26,7 @@ class Soundscape:
                     samples.extend([value] * channels)
                 self._sounds[name] = pygame.mixer.Sound(buffer=samples.tobytes())
             self.available = True
+            self.enabled = True
         except pygame.error:
             pass
 

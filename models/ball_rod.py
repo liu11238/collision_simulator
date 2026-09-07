@@ -19,7 +19,8 @@ from presentation.collision_explainer import CollisionExplainer
 from presentation.impact_motion import draw_scene_explanation, fitted_camera, flow_dots
 from replay.timeline import ReplayFrame, ReplayTimeline
 from render.energy import EnergyState
-from render.primitives import draw_arrow, draw_text, rounded_rect, draw_matte_ball
+from render.primitives import (draw_arrow, draw_matte_ball, draw_soft_shadow,
+                               draw_text, rounded_rect)
 from render.text import clipped
 from render.energy.energy_renderer import draw_energy_flow, draw_energy_ledger
 from render.replay_fx import draw_friction_heat_fx, draw_impact_fx
@@ -73,7 +74,7 @@ class BallHitsRod(BaseModel):
         self.add_control("tau0", "恒定摩擦矩 τ0", 0, 4, 0.00, 0.500, 0.000, " N*m", 4)
 
         # 慢放讲解开关：仅质点—细杆模型提供，控制碰撞瞬间是否冻结并慢放讲解。
-        self.add_toggle("explain", "慢放讲解", 1, 4, True)
+        self.add_toggle("explain", "慢放讲解", 1, 4, False)
 
         # h 仍然保留精确输入，但滑块用 h/L 表示，便于同时调整 L 和碰撞位置。
         self.input_boxes.pop("height_ratio")
@@ -414,7 +415,7 @@ class BallHitsRod(BaseModel):
         self.collision_snapshot = None
         self.impact_explainer = None
         if not hasattr(self, "explain_enabled"):
-            self.explain_enabled = True
+            self.explain_enabled = False
         self.camera_zoom = 1.0
         self.camera_focus = None
         self.rod_trail: list[TrailPoint] = []
@@ -1066,11 +1067,12 @@ class BallHitsRod(BaseModel):
 
         end = w2s(-L * math.cos(display_theta), L * math.sin(display_theta))
         display.glow_surf.fill((0, 0, 0, 0))
+        pygame.draw.line(display.glow_surf, (3, 9, 8, 68),
+                         (scene_pivot[0] + 5, scene_pivot[1] + 7),
+                         (end[0] + 5, end[1] + 7), rod_w + 5)
         pygame.draw.line(display.glow_surf, (*ROD_GLOW, 10), scene_pivot, end, rod_w + 12)
         pygame.draw.line(display.glow_surf, (*ROD_GLOW, 16), scene_pivot, end, rod_w + 5)
         display.screen.blit(display.glow_surf, (0, 0))
-        pygame.draw.line(display.screen, (0, 0, 0), (scene_pivot[0] + 5, scene_pivot[1] + 7),
-                         (end[0] + 5, end[1] + 7), rod_w + 4)
         pygame.draw.line(display.screen, ROD_COLOR, scene_pivot, end, rod_w)
         pygame.draw.line(display.screen, ROD_EDGE, scene_pivot, end, max(2, rod_w // 4))
         pygame.draw.circle(display.screen, (160, 110, 30), end, rod_w // 2 + 3)
@@ -1150,9 +1152,11 @@ class BallHitsRod(BaseModel):
         # Offset the centre by its radius and half the visible rod thickness.
         raw_ball_pos = w2s(display_ball_x, h)
         ball_pos = (raw_ball_pos[0] + br + (rod_w + 1) // 2, raw_ball_pos[1])
-        pygame.draw.ellipse(display.screen, (0, 0, 0),
-                            (ball_pos[0] - br - 4, sy - max(3, br // 4),
-                             2 * br + 8, max(6, br // 2)))
+        draw_soft_shadow(
+            display.screen,
+            (ball_pos[0] - br - 4, sy - max(3, br // 4),
+             2 * br + 8, max(6, br // 2)),
+        )
         draw_matte_ball(display.screen, ball_pos, br, BALL1_COLOR)
 
         if not replay_active and not explainer and self.flash > 0:

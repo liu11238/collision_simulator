@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import math
+
 import pygame
 
 from config import (ACCENT, ACCENT_2, ACCENT_3, LAYOUT, MUTED, PANEL, PANEL_2,
@@ -18,7 +20,7 @@ from render.primitives import (draw_horizontal_gradient_line, draw_spaced_text,
                                draw_text, rounded_rect)
 from render.text import clipped, draw_text_box, wrap_chinese_text
 from ui.widgets import InputBox, Slider, TimelineSlider, Toggle
-from utils import clamp, format_sig3, safe_float
+from utils import clamp, format_sig3, lerp_color, safe_float
 
 PANEL_TITLE_H = 30
 
@@ -49,6 +51,8 @@ class BaseModel:
         self.timeline_slider = TimelineSlider(140, 180, 201)
         self.inspector_scroll = 0
         self.replay_scroll = 0
+        self.ui_time = 0.0
+        self.ui_reveal = 0.0
         self._info_glass = self._build_info_glass()
         self.layout_controls()
         self.reset()
@@ -195,6 +199,8 @@ class BaseModel:
         slider.draw(display.screen, show_value=False, show_label=False)
 
     def update_inputs(self, dt):
+        self.ui_time += max(0.0, min(float(dt), 0.1))
+        self.ui_reveal = min(1.0, self.ui_reveal + max(0.0, dt) * 1.8)
         for box in self.input_boxes.values():
             box.update(dt)
 
@@ -316,6 +322,12 @@ class BaseModel:
         pygame.draw.line(screen, (43, 61, 56),
                          (rect.x + pad, rect.y + PANEL_TITLE_H),
                          (rect.right - pad, rect.y + PANEL_TITLE_H), 1)
+        reveal = 1.0 - (1.0 - self.ui_reveal) ** 3
+        if reveal > 0.001:
+            pygame.draw.line(screen, ACCENT,
+                             (rect.x + pad, rect.y + PANEL_TITLE_H),
+                             (rect.x + pad + int((rect.w - 2 * pad) * reveal),
+                              rect.y + PANEL_TITLE_H), 1)
         return pygame.Rect(rect.x + pad, rect.y + PANEL_TITLE_H + 4,
                            rect.w - 2 * pad,
                            max(0, rect.h - PANEL_TITLE_H - 4 - pad))
@@ -530,7 +542,9 @@ class BaseModel:
         if display_time is None:
             display_time = self.t
         status_color = ACCENT_3 if self.running else ACCENT_2
-        pygame.draw.circle(screen, status_color, (60, LAYOUT.header_h - 15), 3)
+        pulse = (1.0 + math.sin(self.ui_time * 3.2)) * .5
+        pygame.draw.circle(screen, lerp_color(status_color, TEXT, pulse * .2),
+                           (60, LAYOUT.header_h - 15), 3 + int(pulse > .86))
         draw_text(screen, f"COLLISION STUDIO   {state_text}   {format_sig3(display_time)} s",
                   (69, LAYOUT.header_h - 23), font(metrics.tiny_font_size), MUTED,
                   max_width=LAYOUT.tabs[0] - 190)

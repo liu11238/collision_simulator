@@ -94,6 +94,7 @@ class ImpactMotionTests(unittest.TestCase):
         app = App()
         for index, model in enumerate(app.models):
             app.switch_mode(index)
+            model.toggle_explanation()
             model.start_pause()
             for _ in range(1000):
                 model.step(1 / 60)

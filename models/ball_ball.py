@@ -18,7 +18,8 @@ from presentation.impact_motion import (SceneCamera, draw_scene_explanation,
                                         fitted_camera, flow_dots, focus_strength,
                                         stage_progress)
 from render.energy import EnergyState, draw_energy_ledger
-from render.primitives import draw_arrow, draw_text, rounded_rect, draw_matte_ball
+from render.primitives import (draw_arrow, draw_matte_ball, draw_soft_shadow,
+                               draw_text, rounded_rect)
 from render.text import clipped
 from utils import clamp, format_sig3, lerp_color
 
@@ -37,7 +38,7 @@ class BallBallCollision(BaseModel):
         self.add_control("u2", "右球初速度 u2", 1, 1, -12.0, 12.0, 0.00, " m/s", 3)
         self.add_control("e", "恢复系数 e", 1, 2, 0.00, 1.00, 1.00, "", 3)
         self.add_control("anim_speed", "动画速度", 1, 3, 0.20, 2.50, 1.00, "x", 2)
-        self.add_toggle("explain", "慢放讲解", 0, 3, True)
+        self.add_toggle("explain", "慢放讲解", 0, 3, False)
 
 
     def reset(self, keep_running=False):
@@ -394,9 +395,11 @@ class BallBallCollision(BaseModel):
 
         def draw_ball(pos, radius, base_color, edge_color, glow_color, label, mass):
             px, py = pos
-            pygame.draw.ellipse(display.screen, (0, 0, 0),
-                                (px - radius - 6, platform_y - max(4, radius // 4),
-                                 2 * radius + 12, max(8, radius // 2)))
+            draw_soft_shadow(
+                display.screen,
+                (px - radius - 6, platform_y - max(4, radius // 4),
+                 2 * radius + 12, max(8, radius // 2)),
+            )
             draw_matte_ball(display.screen, pos, radius, base_color)
             draw_text(display.screen, label, (px, py + 4), FONT_TINY, (20, 27, 26), anchor="center")
             draw_text(display.screen, f"m={format_sig3(mass)} kg", (px, py + radius + 18), FONT_TINY, MUTED,

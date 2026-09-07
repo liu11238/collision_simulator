@@ -22,6 +22,17 @@ def render_review(destination):
         for index, model in enumerate(app.models):
             app.switch_mode(index)
             model.reset()
+            if model.toggles["explain"].value:
+                model.toggle_explanation()
+            model.update_inputs(1.0)
+            display.begin_frame()
+            model.draw_scene()
+            model.draw_interface()
+            pygame.image.save(
+                display.screen,
+                str(destination / f'{width}_model{index}_default.png'),
+            )
+            model.toggle_explanation()
             model.start_pause()
             for _ in range(2000):
                 model.step(1 / 60)
