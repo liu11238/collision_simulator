@@ -94,7 +94,7 @@ def draw_scene_explanation(surface, scene, elapsed, duration, centers, radii,
     colors = (ACCENT_2, ACCENT_3)
     scene = pygame.Rect(scene)
     badge = pygame.Rect(scene.x + 16, scene.y + 10, 298, 61)
-    rounded_rect(surface, badge, (12, 21, 39), 9, 1, (55, 80, 112))
+    rounded_rect(surface, badge, (23, 36, 34), 9, 1, (64, 87, 76))
     captions = ('速度变化 · 箭头逐步变为碰后速度',
                 '冲量传递 · 两者受到反向接触冲量',
                 '能量分配 · 光点追踪动能去向')
@@ -103,7 +103,7 @@ def draw_scene_explanation(surface, scene, elapsed, duration, centers, radii,
     status = '物理暂停，讲解正在播放' if running else '讲解已暂停'
     draw_text(surface, status, (badge.x + 10, badge.y + 28), FONT_TINY, MUTED)
     track = pygame.Rect(badge.x + 10, badge.bottom - 7, badge.w - 20, 3)
-    pygame.draw.rect(surface, (41, 54, 78), track)
+    pygame.draw.rect(surface, (46, 64, 56), track)
     p = clamp(elapsed / (duration * 3), 0, 1)
     pygame.draw.rect(surface, ACCENT_3, (track.x, track.y, round(track.w * p), 3))
     for center, radius, color in zip(centers, radii, colors):
@@ -144,4 +144,4 @@ def draw_scene_explanation(surface, scene, elapsed, duration, centers, radii,
         if loss > max(1e-9, sum(energy_before) * 1e-9):
             contact = ((centers[0][0] + centers[1][0]) // 2,
                        (centers[0][1] + centers[1][1]) // 2)
-            orbit_focus(surface, contact, max(radii) + 18, -elapsed, (255, 143, 72))
+            orbit_focus(surface, contact, max(radii) + 18, -elapsed, (209, 149, 123))

@@ -226,8 +226,8 @@ def build_layout(width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT) -> AppLayout:
         scene=(outer, scene_y, scene_w, scene_h),
         inspector=(outer + scene_w + gap, scene_y, inspector_w, scene_h),
         timeline=(outer, timeline_y, width - outer * 2, timeline_h),
-        replay_panel=(outer, bottom_y, replay_w, bottom_h),
-        parameter_panel=(outer + replay_w + gap, bottom_y, param_w, bottom_h),
+        replay_panel=(outer + param_w + gap, bottom_y, replay_w, bottom_h),
+        parameter_panel=(outer, bottom_y, param_w, bottom_h),
         energy_panel=(outer + replay_w + gap + param_w + gap, bottom_y,
                       energy_w, bottom_h),
         footer=(0, footer_y, width, footer_h),
@@ -465,40 +465,35 @@ class LiveLayout:
 
 LAYOUT = LiveLayout()
 
-BG_TOP = (6, 10, 22)
-BG_MID = (12, 20, 42)
-BG_BOTTOM = (18, 30, 58)
-PANEL = (16, 22, 40)
-PANEL_2 = (24, 33, 56)
-TEXT = (230, 238, 255)
-
-MUTED = (140, 155, 190)
-ACCENT = (80, 170, 255)
-ACCENT_2 = (255, 200, 70)
-ACCENT_3 = (120, 255, 180)
-ROD_COLOR = (240, 205, 80)
-
-ROD_EDGE = (255, 245, 160)
-ROD_GLOW = (255, 220, 60)
-BALL1_COLOR = (90, 210, 255)
-BALL1_EDGE = (205, 245, 255)
-BALL1_GLOW = (55, 155, 255)
-
-BALL2_COLOR = (255, 155, 85)
-BALL2_EDGE = (255, 235, 195)
-BALL2_GLOW = (255, 125, 55)
-PLATFORM = (90, 105, 140)
-PLATFORM_TOP = (130, 148, 190)
-
-GREEN = (100, 230, 160)
-RED = (255, 90, 90)
-INPUT_BG = (12, 18, 34)
-INPUT_BORDER = (65, 80, 120)
-INPUT_ACTIVE = (80, 170, 255)
-
-SELECT_BG = (50, 100, 170)
-
-TITLE_LETTER_SPACING = 6  # 标题字符之间的横向间距（像素）
+# Quiet laboratory: graphite, sage, clay and warm ivory.
+BG_TOP = (17, 26, 27)
+BG_MID = (22, 34, 35)
+BG_BOTTOM = (26, 39, 39)
+PANEL = (17, 26, 27)
+PANEL_2 = (27, 39, 40)
+TEXT = (231, 236, 225)
+MUTED = (151, 172, 165)
+ACCENT = (151, 207, 184)
+ACCENT_2 = (218, 186, 131)
+ACCENT_3 = (171, 204, 158)
+ROD_COLOR = (203, 178, 129)
+ROD_EDGE = (239, 221, 178)
+ROD_GLOW = (177, 155, 113)
+BALL1_COLOR = (143, 199, 181)
+BALL1_EDGE = (215, 236, 223)
+BALL1_GLOW = (99, 161, 144)
+BALL2_COLOR = (209, 149, 123)
+BALL2_EDGE = (242, 211, 183)
+BALL2_GLOW = (174, 119, 96)
+PLATFORM = (71, 92, 89)
+PLATFORM_TOP = (118, 142, 132)
+GREEN = (171, 204, 158)
+RED = (224, 139, 126)
+INPUT_BG = (20, 31, 32)
+INPUT_BORDER = (64, 86, 81)
+INPUT_ACTIVE = ACCENT
+SELECT_BG = (62, 104, 91)
+TITLE_LETTER_SPACING = 1
 
 # ------------------------------------------------------------------
 # 旧常量兼容层：全部来自默认布局（1600×900）的快照。

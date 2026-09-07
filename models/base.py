@@ -46,7 +46,7 @@ class BaseModel:
         self._toggle_specs: dict[str, dict] = {}
         self.toggles: dict[str, Toggle] = {}
         self.build_controls()
-        self.timeline_slider = TimelineSlider(0, 0, 200)
+        self.timeline_slider = TimelineSlider(140, 180, 201)
         self.inspector_scroll = 0
         self.replay_scroll = 0
         self._info_glass = self._build_info_glass()
@@ -59,7 +59,7 @@ class BaseModel:
     def _build_info_glass(self):
         glass = pygame.Surface((max(1, LAYOUT.info_w), max(1, LAYOUT.info_h)),
                                pygame.SRCALPHA).convert_alpha()
-        rounded_rect(glass, glass.get_rect(), (38, 52, 88, 55), 18)
+        rounded_rect(glass, glass.get_rect(), (38, 52, 45, 20), 18)
         return glass
 
     def relayout(self):
@@ -282,10 +282,10 @@ class BaseModel:
         pygame.draw.rect(screen, PANEL,
                          (0, timeline_rect.y, LAYOUT.width,
                           LAYOUT.height - timeline_rect.y))
-        pygame.draw.line(screen, (65, 80, 125), (0, timeline_rect.y),
+        pygame.draw.line(screen, (60, 81, 77), (0, timeline_rect.y),
                          (LAYOUT.width, timeline_rect.y), 2)
         footer_rect = pygame.Rect(LAYOUT.footer)
-        pygame.draw.line(screen, (90, 110, 160), (0, footer_rect.y),
+        pygame.draw.line(screen, (76, 104, 99), (0, footer_rect.y),
                          (LAYOUT.width, footer_rect.y), 1)
 
         state_text, display_time = self.interface_state()
@@ -303,12 +303,12 @@ class BaseModel:
         screen = display.screen
         metrics = LAYOUT.metrics
         rect = pygame.Rect(rect)
-        rounded_rect(screen, rect, PANEL_2, 14, 1, (58, 72, 112))
+        rounded_rect(screen, rect, PANEL_2, 14, 1, (53, 72, 69))
         pad = metrics.panel_padding
         title_font = font(metrics.small_font_size, True)
         draw_text(screen, title, (rect.x + pad, rect.y + 7), title_font, TEXT,
                   max_width=rect.w - 2 * pad)
-        pygame.draw.line(screen, (48, 62, 96),
+        pygame.draw.line(screen, (46, 62, 59),
                          (rect.x + pad, rect.y + PANEL_TITLE_H),
                          (rect.right - pad, rect.y + PANEL_TITLE_H), 1)
         return pygame.Rect(rect.x + pad, rect.y + PANEL_TITLE_H + 4,
@@ -326,23 +326,23 @@ class BaseModel:
         screen = display.screen
         metrics = LAYOUT.metrics
         info_rect = pygame.Rect(LAYOUT.info_rect)
-        rounded_rect(screen, info_rect, (10, 16, 32), 18)
+        rounded_rect(screen, info_rect, (15, 20, 19), 18)
         if self._info_glass.get_size() != (info_rect.w, info_rect.h):
             self._info_glass = self._build_info_glass()
         screen.blit(self._info_glass, info_rect.topleft)
 
-        pygame.draw.rect(screen, (55, 72, 115), info_rect, width=1,
+        pygame.draw.rect(screen, (55, 74, 71), info_rect, width=1,
                          border_radius=18)
 
         title_font = font(metrics.body_font_size, True)
         small = font(metrics.small_font_size)
         tiny = font(metrics.tiny_font_size)
-        draw_text(screen, "信息面板", (info_rect.x + 18, info_rect.y + 10),
+        draw_text(screen, "观测记录", (info_rect.x + 18, info_rect.y + 10),
                   title_font, TEXT, max_width=info_rect.w - 36)
         draw_horizontal_gradient_line(
             screen, info_rect.x + 16,
             info_rect.y + 10 + title_font.get_height() + 6,
-            info_rect.w - 32, ACCENT, (30, 45, 80), 1)
+            info_rect.w - 32, ACCENT, (38, 52, 49), 1)
         collision_lines = collision_lines or []
 
         # 保留完整碰撞快照，不再按关键词截成两行。面板高度不足时由
@@ -378,15 +378,25 @@ class BaseModel:
                 draw_text(screen, text, (content.x, y), used_font, color,
                           max_width=content.w)
                 y += line_h
+        if max_scroll > 0:
+            rail = pygame.Rect(info_rect.right - 8, content.top, 3, content.h)
+            pygame.draw.rect(screen, (48, 66, 59), rail, border_radius=2)
+            thumb_h = max(22, int(content.h * content.h / (len(rows) * line_h)))
+            thumb_y = rail.y + int((rail.h - thumb_h) * self.inspector_scroll / max_scroll)
+            pygame.draw.rect(screen, MUTED, (rail.x, thumb_y, 3, thumb_h), border_radius=2)
 
     def draw_timeline(self):
         screen = display.screen
         timeline_rect = pygame.Rect(LAYOUT.timeline)
-        draw_text(screen, "Replay 时间轴",
+        draw_text(screen, "时间轴 / REPLAY" if hasattr(self, "replay") else "实验操作",
                   (timeline_rect.x, timeline_rect.y + 5), FONT_SMALL, MUTED)
         state = "回放中" if getattr(self, "replay_mode", False) else "实时"
         draw_text(screen, state, (timeline_rect.right, timeline_rect.y + 5),
                   FONT_SMALL, ACCENT_3, anchor="topright")
+        if not hasattr(self, "replay"):
+            draw_text(screen, "Space 开始 / 暂停    ·    C 直达碰撞    ·    R 重置    ·    E 慢放讲解",
+                      (timeline_rect.x + 150, timeline_rect.y + 5), FONT_SMALL, MUTED,
+                      max_width=timeline_rect.w - 230)
         if hasattr(self, "replay"):
             self.timeline_slider.set_duration(self.replay.duration)
             self.timeline_slider.set_value(self.replay.cursor)
@@ -411,11 +421,11 @@ class BaseModel:
         screen = display.screen
         metrics = LAYOUT.metrics
 
-        content = self._draw_panel_frame(LAYOUT.replay_panel, "碰撞分析 / 回放")
+        content = self._draw_panel_frame(LAYOUT.replay_panel, "02   碰撞过程")
         with clipped(screen, content):
             self.draw_analysis_panel(content)
 
-        param_content = self._draw_panel_frame(LAYOUT.parameter_panel, "参数")
+        param_content = self._draw_panel_frame(LAYOUT.parameter_panel, "01   实验参数")
         panel = pygame.Rect(LAYOUT.parameter_panel)
         pad = metrics.panel_padding
         col_w = (param_content.w - pad) // 2
@@ -448,7 +458,7 @@ class BaseModel:
             for toggle in self.toggles.values():
                 toggle.draw(screen)
 
-        energy_content = self._draw_panel_frame(LAYOUT.energy_panel, "能量面板")
+        energy_content = self._draw_panel_frame(LAYOUT.energy_panel, "03   能量账本")
         with clipped(screen, energy_content):
             self.draw_energy_panel(energy_content)
 
@@ -502,23 +512,21 @@ class BaseModel:
             self.app.btn_snap.draw(screen)
 
     def draw_header(self, state_text, display_time=None):
-        # 标题采用逐字绘制，确保中文字符之间有明显的横向间距。
         screen = display.screen
         metrics = LAYOUT.metrics
-        title_font = font(min(metrics.title_font_size, max(18, (LAYOUT.header_h - 30) // 2)), True)
-        title = draw_spaced_text(
-            screen, self.name, (24, 2), title_font, TEXT,
-            spacing=TITLE_LETTER_SPACING
-        )
-        draw_horizontal_gradient_line(screen, 24, title.bottom + 3,
-                                      title.width, ACCENT, (40, 60, 100), 3)
+        pygame.draw.rect(screen, PANEL, LAYOUT.header)
+        # An orbital mark gives the utility a modest visual identity.
+        cx, cy = 34, LAYOUT.header_h // 2
+        pygame.draw.circle(screen, ACCENT, (cx - 5, cy), 10, 1)
+        pygame.draw.circle(screen, ACCENT_2, (cx + 7, cy), 6)
+        draw_text(screen, "碰撞之间", (58, 7), font(22, True), TEXT)
         if display_time is None:
             display_time = self.t
-        draw_text(screen,
-                  f"状态：{state_text}    时间：{format_sig3(display_time)} s"
-                  f"    FPS:{display.clock.get_fps():.0f}",
-                  (28, LAYOUT.header_h - 26), font(metrics.small_font_size),
-                  MUTED, max_width=max(200, LAYOUT.width - 560))
+        draw_text(screen, f"COLLISION STUDIO  /  {state_text}  /  {format_sig3(display_time)} s",
+                  (59, LAYOUT.header_h - 23), font(metrics.tiny_font_size), MUTED,
+                  max_width=LAYOUT.tabs[0] - 190)
+        if self.app is not None:
+            self.app.btn_sound.draw(screen, self.app.sound.enabled)
 
     def step_particles(self, real_dt, gravity=0.0):
         for particle in self.particles:

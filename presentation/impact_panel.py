@@ -30,14 +30,14 @@ def draw_impact_panel(surface, rect, elapsed, duration, rows, *, impulses,
         for i, label in enumerate(('1  速度变化', '2  冲量与守恒', '3  能量去向')):
             cell = pygame.Rect(rect.x + i * (width + 6), rect.y, width, 25)
             color = ACCENT_3 if i == stage else MUTED
-            pygame.draw.rect(surface, (28, 43, 67), cell, border_radius=6)
+            pygame.draw.rect(surface, (32, 43, 41), cell, border_radius=6)
             text(label, *cell.center, color, 'center', width - 8)
         if active:
             status = '讲解播放中' if running else '讲解已暂停'
             remaining = max(0.0, 3 * duration - elapsed)
             text(f'{status} · 剩余 {remaining:.1f}s · Space 跳过', rect.x + 4, rect.y + 33)
             bar = pygame.Rect(rect.x + 4, rect.y + 27, rect.w - 8, 3)
-            pygame.draw.rect(surface, (42, 55, 78), bar)
+            pygame.draw.rect(surface, (37, 50, 48), bar)
             filled = round(bar.w * clamp(elapsed / (3 * duration), 0, 1))
             pygame.draw.rect(surface, ACCENT_3, (bar.x, bar.y, filled, bar.h))
         else:
@@ -60,7 +60,7 @@ def draw_impact_panel(surface, rect, elapsed, duration, rows, *, impulses,
                     ay = y + line_h + (row_h - line_h) * 0.45
                     end = (round(x + value / scale * rect.w * .18), round(ay))
                     start = (round(x), round(ay))
-                    pygame.draw.line(surface, (62, 73, 97),
+                    pygame.draw.line(surface, (46, 63, 60),
                                      (round(x), round(ay - 5)), (round(x), round(ay + 5)))
                     if abs(value) < 1e-6:
                         text('静止', x, ay, color, 'center')
@@ -93,7 +93,7 @@ def draw_impact_panel(surface, rect, elapsed, duration, rows, *, impulses,
                 text(format_sig3(value), rect.right - 4, y, COLORS[i], 'topright')
                 x0, half_w = rect.x + rect.w * .66, rect.w * .17
                 by = round(y + line_h + 3)
-                pygame.draw.line(surface, (45, 59, 86), (round(x0-half_w), by),
+                pygame.draw.line(surface, (41, 55, 53), (round(x0-half_w), by),
                                  (round(x0+half_w), by), 5)
                 pygame.draw.line(surface, COLORS[i], (round(x0), by),
                                  (round(x0 + value / scale * half_w), by), 5)
@@ -113,7 +113,7 @@ def draw_impact_panel(surface, rect, elapsed, duration, rows, *, impulses,
                 text(label, rect.x + 4, y, COLORS[i])
                 text(f'{format_sig3(value)} J', rect.right - 4, y, COLORS[i], 'topright')
                 bar = pygame.Rect(rect.x + 4, y + line_h + 2, rect.w - 8, 7)
-                pygame.draw.rect(surface, (42, 55, 78), bar, border_radius=3)
+                pygame.draw.rect(surface, (37, 50, 48), bar, border_radius=3)
                 filled = round(bar.w * clamp(value / max(total, 1e-9), 0, 1))
                 if filled > 0:
                     pygame.draw.rect(surface, COLORS[i], (bar.x, bar.y, filled, bar.h), border_radius=3)

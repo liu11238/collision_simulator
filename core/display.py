@@ -8,13 +8,15 @@
 
 from __future__ import annotations
 
+import math
+
 import pygame
 
 from config import (DEFAULT_HEIGHT, DEFAULT_WIDTH, LAYOUT, MIN_HEIGHT,
                     MIN_WIDTH)
 
 pygame.init()
-pygame.display.set_caption("弹性碰撞仿真器")
+pygame.display.set_caption("碰撞之间 · Collision Studio")
 screen = pygame.display.set_mode((DEFAULT_WIDTH, DEFAULT_HEIGHT),
                                  pygame.RESIZABLE)
 clock = pygame.time.Clock()
@@ -35,10 +37,26 @@ from render.primitives import create_static_background  # noqa: E402
 STATIC_BG = create_static_background(DEFAULT_WIDTH, LAYOUT.sim_h)
 
 
+_ambient_time = 0.0
+
+
+def advance_ambience(dt):
+    global _ambient_time
+    _ambient_time += max(0.0, min(float(dt), .1))
+
+
 def begin_frame():
     """清空整帧并铺满顶栏/场景背景，避免动态文字残影和黑边。"""
-    screen.fill((6, 10, 22))
+    screen.fill((17, 26, 27))
     screen.blit(STATIC_BG, (0, 0))
+    # A handful of slow drifting motes, confined to the experiment surface.
+    scene = pygame.Rect(LAYOUT.scene).inflate(-40, -40)
+    for i in range(16):
+        x = scene.x + (i * .61803398875 % 1) * scene.w + math.sin(_ambient_time * .15 + i) * 7
+        y = scene.y + ((i * .381966 + _ambient_time * .002) % 1) * scene.h
+        shade = int(58 + 10 * math.sin(_ambient_time * .4 + i))
+        pygame.draw.circle(screen, (shade, shade + 15, shade + 8), (int(x), int(y)), 1)
+
 
 
 def resize_display(width: int, height: int):

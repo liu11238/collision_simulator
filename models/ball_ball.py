@@ -18,7 +18,7 @@ from presentation.impact_motion import (SceneCamera, draw_scene_explanation,
                                         fitted_camera, flow_dots, focus_strength,
                                         stage_progress)
 from render.energy import EnergyState, draw_energy_ledger
-from render.primitives import draw_arrow, draw_text, rounded_rect
+from render.primitives import draw_arrow, draw_text, rounded_rect, draw_matte_ball
 from render.text import clipped
 from utils import clamp, format_sig3, lerp_color
 
@@ -106,6 +106,8 @@ class BallBallCollision(BaseModel):
         e = self.sliders["e"].value
         u1, u2 = self.v1, self.v2
 
+        if self.app is not None:
+            self.app.sound.play("impact")
         relative_before = u1 - u2
         impulse = -(1.0 + e) * relative_before / (1.0 / m1 + 1.0 / m2)
         v1 = u1 + impulse / m1
@@ -328,18 +330,18 @@ class BallBallCollision(BaseModel):
 
         display.screen.blit(display.STATIC_BG, (0, 0))
         scene_left, scene_right = LAYOUT.scene_x, LAYOUT.scene_x + LAYOUT.scene_w
-        pygame.draw.line(display.screen, (22, 28, 48), (scene_left, platform_y + 10), (scene_right, platform_y + 10), 10)
-        pygame.draw.line(display.screen, (35, 44, 70), (scene_left, platform_y + 4), (scene_right, platform_y + 4), 8)
+        pygame.draw.line(display.screen, (23, 31, 29), (scene_left, platform_y + 10), (scene_right, platform_y + 10), 10)
+        pygame.draw.line(display.screen, (33, 45, 43), (scene_left, platform_y + 4), (scene_right, platform_y + 4), 8)
         pygame.draw.line(display.screen, PLATFORM, (scene_left, platform_y), (scene_right, platform_y), 5)
         pygame.draw.line(display.screen, PLATFORM_TOP, (scene_left, platform_y - 1), (scene_right, platform_y - 1), 2)
 
         for tx in range(scene_left, scene_right, 18):
-            pygame.draw.line(display.screen, (100, 115, 155), (tx, platform_y), (tx + 6, platform_y + 4), 1)
+            pygame.draw.line(display.screen, (74, 100, 96), (tx, platform_y), (tx + 6, platform_y + 4), 1)
 
-        pygame.draw.line(display.screen, (80, 100, 150), (scene_left, center_y), (scene_right, center_y), 1)
+        pygame.draw.line(display.screen, (72, 97, 93), (scene_left, center_y), (scene_right, center_y), 1)
         for world_x in range(-4, 5):
             sx, _ = w2s(world_x)
-            pygame.draw.line(display.screen, (85, 105, 150), (sx, center_y - 7), (sx, center_y + 7), 1)
+            pygame.draw.line(display.screen, (72, 97, 93), (sx, center_y - 7), (sx, center_y + 7), 1)
             draw_text(display.screen, f"{world_x}", (sx, center_y + 12), FONT_TINY, MUTED, anchor="midtop")
 
 
@@ -349,10 +351,10 @@ class BallBallCollision(BaseModel):
             if right_surface > left_surface:
                 p1 = w2s(left_surface, -0.72)
                 p2 = w2s(right_surface, -0.72)
-                pygame.draw.line(display.screen, (105, 125, 175), p1, p2, 2)
+                pygame.draw.line(display.screen, (84, 113, 108), p1, p2, 2)
 
-                pygame.draw.line(display.screen, (105, 125, 175), (p1[0], p1[1] - 7), (p1[0], p1[1] + 7), 2)
-                pygame.draw.line(display.screen, (105, 125, 175), (p2[0], p2[1] - 7), (p2[0], p2[1] + 7), 2)
+                pygame.draw.line(display.screen, (84, 113, 108), (p1[0], p1[1] - 7), (p1[0], p1[1] + 7), 2)
+                pygame.draw.line(display.screen, (84, 113, 108), (p2[0], p2[1] - 7), (p2[0], p2[1] + 7), 2)
                 draw_text(display.screen, f"当前间距={format_sig3(right_surface - left_surface)} m",
                           ((p1[0] + p2[0]) // 2, p1[1] + 10), FONT_SMALL, MUTED, anchor="midtop")
 
@@ -395,20 +397,8 @@ class BallBallCollision(BaseModel):
             pygame.draw.ellipse(display.screen, (0, 0, 0),
                                 (px - radius - 6, platform_y - max(4, radius // 4),
                                  2 * radius + 12, max(8, radius // 2)))
-            display.glow_surf.fill((0, 0, 0, 0))
-            pygame.draw.circle(display.glow_surf, (*glow_color, 28), pos, radius + 20)
-            pygame.draw.circle(display.glow_surf, (*glow_color, 46), pos, radius + 11)
-
-            display.screen.blit(display.glow_surf, (0, 0))
-            pygame.draw.circle(display.screen, (4, 10, 23), (px + 4, py + 5), radius + 2)
-            pygame.draw.circle(display.screen, base_color, pos, radius)
-            pygame.draw.circle(display.screen, lerp_color(base_color, (15, 55, 100), 0.35), pos, radius, 2)
-            pygame.draw.circle(display.screen, edge_color,
-                               (px - radius // 3, py - radius // 3), max(4, radius // 4))
-
-            pygame.draw.circle(display.screen, (255, 255, 255),
-                               (px - radius // 3 - 1, py - radius // 3 - 1), max(2, radius // 8))
-            draw_text(display.screen, label, (px, py + 4), FONT_TINY, (8, 26, 42), anchor="center")
+            draw_matte_ball(display.screen, pos, radius, base_color)
+            draw_text(display.screen, label, (px, py + 4), FONT_TINY, (20, 27, 26), anchor="center")
             draw_text(display.screen, f"m={format_sig3(mass)} kg", (px, py + radius + 18), FONT_TINY, MUTED,
                       anchor="topright" if label == '球 1' else "topleft")
 

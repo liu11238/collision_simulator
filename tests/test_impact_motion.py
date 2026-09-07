@@ -67,19 +67,20 @@ class ImpactMotionTests(unittest.TestCase):
 
     def test_rendered_ball_remains_tangent_during_zoom(self):
         model = self.rod()
-        real_circle, real_line = pygame.draw.circle, pygame.draw.line
+        from render.primitives import draw_matte_ball
+        real_line = pygame.draw.line
         for elapsed in (0.0, .4, 1.4, 2.19):
             balls, rods = [], []
-            def circle(surface, color, center, radius, *args, **kwargs):
+            def sphere(surface, center, radius, color):
                 if surface is display.screen and color == BALL1_COLOR:
                     balls.append((center, radius))
-                return real_circle(surface, color, center, radius, *args, **kwargs)
+                return draw_matte_ball(surface, center, radius, color)
             def line(surface, color, start, end, width=1):
                 if surface is display.screen and color == ROD_COLOR:
                     rods.append((start, end, width))
                 return real_line(surface, color, start, end, width)
             model.impact_explainer.elapsed = elapsed
-            with patch('pygame.draw.circle', circle), patch('pygame.draw.line', line):
+            with patch('models.ball_rod.draw_matte_ball', sphere), patch('pygame.draw.line', line):
                 display.begin_frame()
                 model.draw_scene()
             center, radius = balls[-1]

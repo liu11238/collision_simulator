@@ -9,11 +9,11 @@ from render.primitives import draw_text
 from render.text import clipped, format_measurement
 from .energy_state import EnergyState
 
-ROD_ENERGY = (255, 204, 78)
-BALL_ENERGY = (75, 211, 255)
-POTENTIAL_ENERGY = (145, 125, 255)
-COLLISION_LOSS = (255, 143, 72)
-FRICTION_HEAT = (255, 92, 110)
+ROD_ENERGY = (203, 178, 129)
+BALL_ENERGY = (159, 217, 210)
+POTENTIAL_ENERGY = (176, 202, 210)
+COLLISION_LOSS = (209, 149, 123)
+FRICTION_HEAT = (219, 147, 152)
 
 
 def _segments(state):
@@ -42,7 +42,7 @@ def draw_energy_ledger(surface, rect, account, snapshot=None, title=None, kineti
                   (rect.x, y), strong, TEXT, max_width=rect.w)
         y += strong.get_height() + 7
         bar = pygame.Rect(rect.x, y, rect.w, 16)
-        pygame.draw.rect(surface, (30, 42, 70), bar, border_radius=6)
+        pygame.draw.rect(surface, (33, 45, 43), bar, border_radius=6)
         scale = max(abs(state.initial), 1e-12)
         cursor = bar.x
         for _, value, color in _segments(state):
@@ -67,7 +67,7 @@ def draw_energy_ledger(surface, rect, account, snapshot=None, title=None, kineti
             draw_text(surface, label, (rect.x, y), body, color,
                       max_width=label_w - 4)
             meter = pygame.Rect(meter_x, y + 4, meter_w, 7)
-            pygame.draw.rect(surface, (31, 43, 70), meter, border_radius=3)
+            pygame.draw.rect(surface, (33, 45, 43), meter, border_radius=3)
             fill = int(meter.w * max(0.0, value) / scale)
             if value > 0 and fill == 0:
                 fill = 2

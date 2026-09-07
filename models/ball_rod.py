@@ -19,7 +19,7 @@ from presentation.collision_explainer import CollisionExplainer
 from presentation.impact_motion import draw_scene_explanation, fitted_camera, flow_dots
 from replay.timeline import ReplayFrame, ReplayTimeline
 from render.energy import EnergyState
-from render.primitives import draw_arrow, draw_text, rounded_rect
+from render.primitives import draw_arrow, draw_text, rounded_rect, draw_matte_ball
 from render.text import clipped
 from render.energy.energy_renderer import draw_energy_flow, draw_energy_ledger
 from render.replay_fx import draw_friction_heat_fx, draw_impact_fx
@@ -471,6 +471,8 @@ class BallHitsRod(BaseModel):
         """创建碰撞快照，并按设置进入讲解冻结阶段或直接提交。"""
         if explain is None:
             explain = self.explain_enabled
+        if self.app is not None:
+            self.app.sound.play("impact")
         result = self.solve_collision()
         self.collision_snapshot = result
         before_frame = self._replay_frame(
@@ -983,22 +985,22 @@ class BallHitsRod(BaseModel):
         sx1, sy = w2s(min(-1.5 * L, display_ball_x - 0.8 * L), platform_y)
         sx2, _ = w2s(1.25 * L, platform_y)
         sx1, sx2 = max(-80, sx1), min(LAYOUT.width + 80, sx2)
-        pygame.draw.line(display.screen, (22, 28, 48), (sx1, sy + 10), (sx2, sy + 10), 10)
-        pygame.draw.line(display.screen, (35, 44, 70), (sx1, sy + 4), (sx2, sy + 4), 8)
+        pygame.draw.line(display.screen, (23, 31, 29), (sx1, sy + 10), (sx2, sy + 10), 10)
+        pygame.draw.line(display.screen, (33, 45, 43), (sx1, sy + 4), (sx2, sy + 4), 8)
         pygame.draw.line(display.screen, PLATFORM, (sx1, sy), (sx2, sy), 5)
         pygame.draw.line(display.screen, PLATFORM_TOP, (sx1, sy - 1), (sx2, sy - 1), 2)
         for tx in range(max(-40, sx1), min(LAYOUT.width + 40, sx2), 18):
-            pygame.draw.line(display.screen, (100, 115, 155), (tx, sy), (tx + 6, sy + 4), 1)
+            pygame.draw.line(display.screen, (74, 100, 96), (tx, sy), (tx + 6, sy + 4), 1)
 
         # 竖直参考线和碰撞高度标记。
         ref_x, ref_y = w2s(0.0, L)
         for y in range(scene_pivot[1] + 4, ref_y, 12):
-            pygame.draw.line(display.screen, (80, 105, 150), (scene_pivot[0], y),
+            pygame.draw.line(display.screen, (72, 97, 93), (scene_pivot[0], y),
                              (scene_pivot[0], min(y + 6, ref_y)), 1)
         hx, hy = w2s(-0.36 * L, h)
-        pygame.draw.line(display.screen, (100, 120, 165), (hx, scene_pivot[1]), (hx, hy), 2)
-        pygame.draw.line(display.screen, (100, 120, 165), (hx - 9, scene_pivot[1]), (hx + 9, scene_pivot[1]), 2)
-        pygame.draw.line(display.screen, (100, 120, 165), (hx - 9, hy), (hx + 9, hy), 2)
+        pygame.draw.line(display.screen, (79, 107, 102), (hx, scene_pivot[1]), (hx, hy), 2)
+        pygame.draw.line(display.screen, (79, 107, 102), (hx - 9, scene_pivot[1]), (hx + 9, scene_pivot[1]), 2)
+        pygame.draw.line(display.screen, (79, 107, 102), (hx - 9, hy), (hx + 9, hy), 2)
         draw_text(display.screen, f"h={format_sig3(h)}m", (hx - 10, (scene_pivot[1] + hy) // 2),
                   FONT_SMALL, MUTED, anchor="midright")
         draw_text(display.screen, "竖直碰撞位置", (scene_pivot[0] + 12, ref_y - 20), FONT_SMALL, MUTED)
@@ -1055,7 +1057,7 @@ class BallHitsRod(BaseModel):
                 if life <= 0.0:
                     continue
                 end = w2s(-L * math.cos(point.theta), L * math.sin(point.theta))
-                alpha = int(80.0 * life)
+                alpha = int(35.0 * life)
                 pygame.draw.line(
                     display.trail_surf_1, (*ROD_GLOW, alpha), scene_pivot, end,
                     max(2, int(rod_w * (0.35 + 0.65 * life))),
@@ -1064,8 +1066,8 @@ class BallHitsRod(BaseModel):
 
         end = w2s(-L * math.cos(display_theta), L * math.sin(display_theta))
         display.glow_surf.fill((0, 0, 0, 0))
-        pygame.draw.line(display.glow_surf, (*ROD_GLOW, 35), scene_pivot, end, rod_w + 12)
-        pygame.draw.line(display.glow_surf, (*ROD_GLOW, 60), scene_pivot, end, rod_w + 5)
+        pygame.draw.line(display.glow_surf, (*ROD_GLOW, 10), scene_pivot, end, rod_w + 12)
+        pygame.draw.line(display.glow_surf, (*ROD_GLOW, 16), scene_pivot, end, rod_w + 5)
         display.screen.blit(display.glow_surf, (0, 0))
         pygame.draw.line(display.screen, (0, 0, 0), (scene_pivot[0] + 5, scene_pivot[1] + 7),
                          (end[0] + 5, end[1] + 7), rod_w + 4)
@@ -1075,16 +1077,16 @@ class BallHitsRod(BaseModel):
         pygame.draw.circle(display.screen, ROD_EDGE, end, max(3, rod_w // 4))
 
         px, py = scene_pivot
-        pygame.draw.rect(display.screen, (38, 48, 76), (px - 24, py - 38, 14, 76), border_radius=5)
-        pygame.draw.circle(display.screen, (5, 8, 18), (px + 3, py + 4), 26)
-        pygame.draw.circle(display.screen, (50, 62, 95), scene_pivot, 24)
-        pygame.draw.circle(display.screen, (28, 38, 64), scene_pivot, 20)
-        pygame.draw.circle(display.screen, (65, 82, 128), scene_pivot, 16)
+        pygame.draw.rect(display.screen, (36, 49, 47), (px - 24, py - 38, 14, 76), border_radius=5)
+        pygame.draw.circle(display.screen, (8, 11, 11), (px + 3, py + 4), 26)
+        pygame.draw.circle(display.screen, (45, 61, 58), scene_pivot, 24)
+        pygame.draw.circle(display.screen, (30, 41, 39), scene_pivot, 20)
+        pygame.draw.circle(display.screen, (61, 83, 79), scene_pivot, 16)
         pygame.draw.circle(display.screen, ACCENT, scene_pivot, 6)
         pygame.draw.circle(display.screen, (210, 240, 255), scene_pivot, 3)
 
         w_rect = pygame.Rect(px + 32, py - 30, 210, 34)
-        rounded_rect(display.screen, w_rect, (12, 20, 38), 9, 1, (70, 95, 145))
+        rounded_rect(display.screen, w_rect, (18, 24, 23), 9, 1, (69, 94, 89))
         draw_text(display.screen, f"w = {format_sig3(display_omega)} rad/s", w_rect.center,
                   FONT_SMALL, ACCENT_3, anchor="center")
 
@@ -1151,18 +1153,7 @@ class BallHitsRod(BaseModel):
         pygame.draw.ellipse(display.screen, (0, 0, 0),
                             (ball_pos[0] - br - 4, sy - max(3, br // 4),
                              2 * br + 8, max(6, br // 2)))
-        display.glow_surf.fill((0, 0, 0, 0))
-        pygame.draw.circle(display.glow_surf, (*BALL1_GLOW, 28), ball_pos, br + 20)
-        pygame.draw.circle(display.glow_surf, (*BALL1_GLOW, 45), ball_pos, br + 12)
-        display.screen.blit(display.glow_surf, (0, 0))
-        pygame.draw.circle(display.screen, (4, 10, 23), (ball_pos[0] + 4, ball_pos[1] + 5), br + 2)
-        pygame.draw.circle(display.screen, BALL1_COLOR, ball_pos, br)
-        pygame.draw.circle(display.screen, (31, 125, 190), ball_pos, br, 2)
-        pygame.draw.circle(display.screen, BALL1_EDGE,
-                           (ball_pos[0] - br // 3, ball_pos[1] - br // 3), max(3, br // 4))
-        pygame.draw.circle(display.screen, (255, 255, 255),
-                           (ball_pos[0] - br // 3 - 1, ball_pos[1] - br // 3 - 1),
-                           max(2, br // 7))
+        draw_matte_ball(display.screen, ball_pos, br, BALL1_COLOR)
 
         if not replay_active and not explainer and self.flash > 0:
             contact = w2s(0.0, h)
@@ -1313,7 +1304,7 @@ class BallHitsRod(BaseModel):
         for index, (label, value, color) in enumerate(values):
             y = rect.y + 76 + index * 38
             draw_text(display.screen, label, (rect.x + 14, y), FONT_TINY, TEXT)
-            pygame.draw.rect(display.screen, (30, 43, 72), (x, y + 2, width, 12), border_radius=5)
+            pygame.draw.rect(display.screen, (34, 46, 44), (x, y + 2, width, 12), border_radius=5)
             pygame.draw.line(display.screen, (220, 230, 250), (zero_x, y),
                              (zero_x, y + 16), 1)
             bar = int((width // 2 - 5) * clamp(abs(value) / max_value, 0.0, 1.0))
@@ -1337,7 +1328,7 @@ class BallHitsRod(BaseModel):
         centers = [rect.x + int(rect.w * p) for p in (0.16, 0.50, 0.84)]
         y = rect.y + 8
         for i in range(2):
-            pygame.draw.line(display.screen, (65, 82, 125),
+            pygame.draw.line(display.screen, (60, 81, 77),
                              (centers[i] + 34, y + 9),
                              (centers[i + 1] - 34, y + 9), 2)
         for center, label in zip(centers, labels):

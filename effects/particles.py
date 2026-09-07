@@ -127,7 +127,7 @@ def spawn_impact_particles(particles, shockwaves, x, y, strength, direction=1.0,
     strength = clamp(abs(strength), 0.8, 14.0)
     root = math.sqrt(strength)
 
-    for _ in range(52):
+    for _ in range(6):
         side = random.choice((-1.0, 1.0)) if symmetric else direction
         ang = random.uniform(-0.95, 0.95)
 
@@ -137,12 +137,12 @@ def spawn_impact_particles(particles, shockwaves, x, y, strength, direction=1.0,
         particles.append(Particle(
             "spark", x, y, vx, vy, random.uniform(0.28, 0.72),
             size=random.uniform(2.0, 4.6),
-            color_start=lerp_color((255, 255, 225), (255, 185, 45), random.random()),
-            color_end=lerp_color((255, 100, 20), (120, 35, 12), random.random()),
+            color_start=lerp_color((234, 230, 199), (187, 214, 182), random.random()),
+            color_end=lerp_color((127, 161, 134), (45, 70, 59), random.random()),
             trail_len=random.randint(4, 9),
         ))
 
-    for _ in range(28):
+    for _ in range(6):
         ang = random.uniform(0, 2 * math.pi)
 
         speed = random.uniform(0.2, 1.3) * root
@@ -151,29 +151,12 @@ def spawn_impact_particles(particles, shockwaves, x, y, strength, direction=1.0,
             math.cos(ang) * speed,
             math.sin(ang) * speed + vertical_bias,
             random.uniform(0.5, 1.2),
-            size=random.uniform(3.0, 6.0),
-            color_start=(255, 215, 90),
-            color_end=(60, 15, 5),
+            size=random.uniform(1.5, 2.8),
+            color_start=(209, 185, 136),
+            color_end=(45, 57, 46),
         ))
 
-    for _ in range(12):
-        side = random.choice((-1.0, 1.0)) if symmetric else direction
-        ang = random.uniform(-1.2, 1.2)
-        speed = random.uniform(0.5, 1.9) * root
-
-        particles.append(Particle(
-            "debris", x, y,
-            side * abs(math.cos(ang)) * speed,
-            math.sin(ang) * speed + vertical_bias,
-            random.uniform(0.4, 0.9),
-            size=random.uniform(3.5, 7.0),
-            color_start=(240, 190, 90),
-            color_end=(40, 15, 5),
-            angle=random.uniform(0, 2 * math.pi),
-            spin=random.uniform(-8, 8),
-        ))
-
-    for _ in range(18):
+    for _ in range(6):
         side = random.choice((-1.0, 1.0)) if symmetric else direction
         speed = random.uniform(2.8, 6.5) * root
         particles.append(Particle(
@@ -187,8 +170,8 @@ def spawn_impact_particles(particles, shockwaves, x, y, strength, direction=1.0,
         ))
 
     for radius, life, color, width in [
-        (0.22, 0.22, (255, 240, 160), 3),
-        (0.40, 0.34, (255, 180, 80), 2),
-        (0.62, 0.48, (120, 200, 255), 2),
+        (0.22, 0.22, (229, 216, 177), 1),
+        (0.40, 0.34, (192, 166, 127), 1),
+        (0.62, 0.48, (151, 207, 184), 1),
     ]:
         shockwaves.append(ShockWave(x, y, radius, life, color, width))

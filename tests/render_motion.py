@@ -36,6 +36,7 @@ def render_motion(destination, fps=30):
             model.reset()
             # Include normal view, the full explanation, and automatic resume.
             for _ in range(fps // 2):
+                display.advance_ambience(1 / fps)
                 display.begin_frame()
                 model.draw_scene()
                 model.draw_interface()
@@ -44,6 +45,7 @@ def render_motion(destination, fps=30):
             after_frames = 0
             for _ in range(20 * fps):
                 model.step(1 / fps)
+                display.advance_ambience(1 / fps)
                 display.begin_frame()
                 model.draw_scene()
                 model.draw_interface()

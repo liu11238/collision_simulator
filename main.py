@@ -9,6 +9,7 @@ import pygame
 from config import (DEFAULT_HEIGHT, DEFAULT_WIDTH, FPS, LAYOUT, MIN_HEIGHT,
                     MIN_WIDTH)
 from core import display
+from core.audio import Soundscape
 from models.ball_ball import BallBallCollision
 from models.ball_rod import BallHitsRod
 from ui.widgets import Button
@@ -26,6 +27,7 @@ def _event_size(event):
 
 class App:
     def __init__(self):
+        self.sound = Soundscape()
         self.models = [BallBallCollision(), BallHitsRod()]
         for model in self.models:
             model.app = self
@@ -47,11 +49,13 @@ class App:
             pygame.Rect(x + start_w + gap + reset_w + gap, action.y,
                         snap_w, action.h))
 
+        self.btn_sound = Button("音效 关 · M", pygame.Rect(tabs.x - 122, tabs.y + 4, 110, tabs.h - 8))
+
         tab_w = min(240, (tabs.w - 12) // 2)
         self.mode_buttons = [
-            Button("1  双球一维碰撞仿真",
+            Button("01   双球碰撞",
                    pygame.Rect(tabs.x, tabs.y, tab_w, tabs.h)),
-            Button("2  质点‑定轴细杆碰撞仿真",
+            Button("02   质点与细杆",
                    pygame.Rect(tabs.x + tab_w + 12, tabs.y, tab_w, tabs.h)),
         ]
 
@@ -80,6 +84,7 @@ class App:
             self.model.running = False
 
     def draw_mode_tabs(self):
+        self.btn_sound.text = ("音效 开 · M" if self.sound.enabled else "音效 关 · M") if self.sound.available else "音效不可用"
         for i, button in enumerate(self.mode_buttons):
             button.draw(display.screen, active=(i == self.mode_index))
 
@@ -115,6 +120,10 @@ class App:
                     self.handle_resize_event(event)
                     continue
 
+                if self.btn_sound.clicked(event):
+                    self.sound.toggle()
+                    continue
+
                 switched = False
 
                 for i, button in enumerate(self.mode_buttons):
@@ -143,6 +152,8 @@ class App:
                         self.switch_mode(1)
                     elif event.key == pygame.K_SPACE:
                         model.start_pause()
+                    elif event.key == pygame.K_m:
+                        self.sound.toggle()
                     elif event.key == pygame.K_e and hasattr(model, "toggle_explanation"):
                         model.toggle_explanation()
                     elif event.key == pygame.K_r:
@@ -186,6 +197,7 @@ class App:
                 model.sync_inputs(force=False)
 
             model.step(dt)
+            display.advance_ambience(dt)
             # 标题、时间与 FPS 每帧都可能变短；必须先重绘完整背景，
             # 否则旧字形会残留。背景同时覆盖顶栏和整个场景宽度。
             display.begin_frame()

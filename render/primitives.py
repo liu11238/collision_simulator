@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import math
-import random
 from collections import OrderedDict
+from functools import lru_cache
 
 import pygame
 
@@ -146,42 +146,41 @@ def draw_arrow(surface, start, end, color, width=3):
 
 
 def create_static_background(width: int, height: int):
-    """按指定场景尺寸生成星空渐变背景；窗口缩放时整体重建而非拉伸。"""
-    width = max(1, int(width))
-    height = max(1, int(height))
-    sx = width / 1280.0
-    bg = pygame.Surface((width, height)).convert()
+    """Cached quiet drafting surface; sparse marks leave the experiment legible."""
+    from config import LAYOUT
+    bg = pygame.Surface((max(1, width), max(1, height))).convert()
     draw_gradient_3(bg, (0, 0, width, height), BG_TOP, BG_MID, BG_BOTTOM)
-
-    stars = pygame.Surface((width, height), pygame.SRCALPHA).convert_alpha()
-    rng = random.Random(42)
-
-    for _ in range(130):
-        x = rng.randint(0, width - 1)
-        y = rng.randint(0, height - 1)
-        a = rng.randint(35, 135)
-        r = rng.randint(1, 2)
-        pygame.draw.circle(stars, (200, 215, 255, a), (x, y), r)
-    bg.blit(stars, (0, 0))
-
-
-    soft = pygame.Surface((width, height), pygame.SRCALPHA).convert_alpha()
-    for r, a in [(280, 12), (195, 18), (120, 26), (65, 36)]:
-        pygame.draw.circle(soft, (70, 130, 255, a), (int(1010 * sx), int(110 * height / 720)), r)
-    for r, a in [(170, 10), (95, 16)]:
-        pygame.draw.circle(soft, (255, 125, 90, a), (int(180 * sx), height - int(85 * height / 720)), r)
-    bg.blit(soft, (0, 0))
-
-    grid = pygame.Surface((width, height), pygame.SRCALPHA).convert_alpha()
-
-    for x in range(0, width, 50):
-        pygame.draw.line(grid, (255, 255, 255, 8), (x, 0), (x, height))
-    for y in range(0, height, 50):
-        pygame.draw.line(grid, (255, 255, 255, 7), (0, y), (width, y))
-    for x in range(0, width, 100):
-        pygame.draw.line(grid, (255, 255, 255, 14), (x, 0), (x, height))
-    for y in range(0, height, 100):
-        pygame.draw.line(grid, (255, 255, 255, 12), (0, y), (width, y))
-    bg.blit(grid, (0, 0))
-
+    scene = pygame.Rect(LAYOUT.scene).inflate(-2, -12)
+    for x in range(scene.left + 20, scene.right - 16, 32):
+        for y in range(scene.top + 20, scene.bottom - 12, 32):
+            pygame.draw.circle(bg, (40, 55, 53), (x, y), 1)
+    pygame.draw.rect(bg, (57, 76, 70), scene, 1, border_radius=16)
+    # Small drafting corners, deliberately quieter than the velocity vectors.
+    for x, dx in ((scene.left + 12, 1), (scene.right - 12, -1)):
+        for y, dy in ((scene.top + 12, 1), (scene.bottom - 12, -1)):
+            pygame.draw.line(bg, (99, 124, 112), (x, y), (x + 10 * dx, y))
+            pygame.draw.line(bg, (99, 124, 112), (x, y), (x, y + 10 * dy))
     return bg
+
+
+@lru_cache(maxsize=96)
+def _sphere(radius, color):
+    """Small cached matte sphere, softly lit from above left."""
+    radius = max(2, radius)
+    image = pygame.Surface((radius * 2 + 4, radius * 2 + 4), pygame.SRCALPHA)
+    for y in range(-radius, radius + 1):
+        for x in range(-radius, radius + 1):
+            d = (x*x + y*y) / (radius*radius)
+            if d > 1:
+                continue
+            z = math.sqrt(1-d)
+            light = max(0, (-x/radius*.35 - y/radius*.45 + z*.82))
+            shade = .55 + .40*light
+            c = tuple(min(255, int(v*shade + 17*light)) for v in color)
+            image.set_at((x+radius+2, y+radius+2), (*c, int(255*min(1, (1-d)*radius))))
+    return image
+
+
+def draw_matte_ball(surface, pos, radius, color):
+    image = _sphere(int(radius), tuple(color))
+    surface.blit(image, (pos[0]-radius-2, pos[1]-radius-2))
