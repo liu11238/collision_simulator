@@ -303,12 +303,17 @@ class BaseModel:
         screen = display.screen
         metrics = LAYOUT.metrics
         rect = pygame.Rect(rect)
-        rounded_rect(screen, rect, PANEL_2, 14, 1, (53, 72, 69))
+        rounded_rect(screen, rect, PANEL_2, 12, 1, (49, 70, 64))
         pad = metrics.panel_padding
         title_font = font(metrics.small_font_size, True)
-        draw_text(screen, title, (rect.x + pad, rect.y + 7), title_font, TEXT,
-                  max_width=rect.w - 2 * pad)
-        pygame.draw.line(screen, (46, 62, 59),
+        number, _, label = title.partition("   ")
+        badge = pygame.Rect(rect.x + pad, rect.y + 7, 25, 18)
+        rounded_rect(screen, badge, (42, 65, 58), 5)
+        draw_text(screen, number, badge.center,
+                  font(metrics.tiny_font_size, True), ACCENT, anchor="center")
+        draw_text(screen, label or number, (badge.right + 8, rect.y + 7),
+                  title_font, TEXT, max_width=rect.w - 2 * pad - 35)
+        pygame.draw.line(screen, (43, 61, 56),
                          (rect.x + pad, rect.y + PANEL_TITLE_H),
                          (rect.right - pad, rect.y + PANEL_TITLE_H), 1)
         return pygame.Rect(rect.x + pad, rect.y + PANEL_TITLE_H + 4,
@@ -326,19 +331,21 @@ class BaseModel:
         screen = display.screen
         metrics = LAYOUT.metrics
         info_rect = pygame.Rect(LAYOUT.info_rect)
-        rounded_rect(screen, info_rect, (15, 20, 19), 18)
+        rounded_rect(screen, info_rect, (14, 23, 23), 14)
         if self._info_glass.get_size() != (info_rect.w, info_rect.h):
             self._info_glass = self._build_info_glass()
         screen.blit(self._info_glass, info_rect.topleft)
 
-        pygame.draw.rect(screen, (55, 74, 71), info_rect, width=1,
-                         border_radius=18)
+        pygame.draw.rect(screen, (49, 70, 64), info_rect, width=1,
+                         border_radius=14)
 
         title_font = font(metrics.body_font_size, True)
         small = font(metrics.small_font_size)
         tiny = font(metrics.tiny_font_size)
         draw_text(screen, "观测记录", (info_rect.x + 18, info_rect.y + 10),
                   title_font, TEXT, max_width=info_rect.w - 36)
+        draw_text(screen, "LIVE DATA", (info_rect.right - 18, info_rect.y + 13),
+                  tiny, ACCENT, anchor="topright")
         draw_horizontal_gradient_line(
             screen, info_rect.x + 16,
             info_rect.y + 10 + title_font.get_height() + 6,
@@ -519,11 +526,13 @@ class BaseModel:
         cx, cy = 34, LAYOUT.header_h // 2
         pygame.draw.circle(screen, ACCENT, (cx - 5, cy), 10, 1)
         pygame.draw.circle(screen, ACCENT_2, (cx + 7, cy), 6)
-        draw_text(screen, "碰撞之间", (58, 7), font(22, True), TEXT)
+        draw_text(screen, "碰撞之间", (58, 6), font(22, True), TEXT)
         if display_time is None:
             display_time = self.t
-        draw_text(screen, f"COLLISION STUDIO  /  {state_text}  /  {format_sig3(display_time)} s",
-                  (59, LAYOUT.header_h - 23), font(metrics.tiny_font_size), MUTED,
+        status_color = ACCENT_3 if self.running else ACCENT_2
+        pygame.draw.circle(screen, status_color, (60, LAYOUT.header_h - 15), 3)
+        draw_text(screen, f"COLLISION STUDIO   {state_text}   {format_sig3(display_time)} s",
+                  (69, LAYOUT.header_h - 23), font(metrics.tiny_font_size), MUTED,
                   max_width=LAYOUT.tabs[0] - 190)
         if self.app is not None:
             self.app.btn_sound.draw(screen, self.app.sound.enabled)

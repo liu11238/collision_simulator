@@ -151,10 +151,18 @@ def create_static_background(width: int, height: int):
     bg = pygame.Surface((max(1, width), max(1, height))).convert()
     draw_gradient_3(bg, (0, 0, width, height), BG_TOP, BG_MID, BG_BOTTOM)
     scene = pygame.Rect(LAYOUT.scene).inflate(-2, -12)
+    haze = pygame.Surface((width, height), pygame.SRCALPHA)
+    for radius, alpha in ((300, 8), (210, 10), (125, 12)):
+        pygame.draw.circle(haze, (130, 191, 168, alpha),
+                           (scene.left + scene.w // 3, scene.centery), radius)
+    for radius, alpha in ((230, 6), (140, 9)):
+        pygame.draw.circle(haze, (205, 153, 123, alpha),
+                           (scene.right - scene.w // 5, scene.top + 70), radius)
+    bg.blit(haze, (0, 0))
     for x in range(scene.left + 20, scene.right - 16, 32):
         for y in range(scene.top + 20, scene.bottom - 12, 32):
             pygame.draw.circle(bg, (40, 55, 53), (x, y), 1)
-    pygame.draw.rect(bg, (57, 76, 70), scene, 1, border_radius=16)
+    pygame.draw.rect(bg, (52, 72, 66), scene, 1, border_radius=16)
     # Small drafting corners, deliberately quieter than the velocity vectors.
     for x, dx in ((scene.left + 12, 1), (scene.right - 12, -1)):
         for y, dy in ((scene.top + 12, 1), (scene.bottom - 12, -1)):

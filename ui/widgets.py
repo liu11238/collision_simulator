@@ -191,12 +191,16 @@ class Button:
     def draw(self, surface, active=False):
         self._hover = self.rect.collidepoint(pygame.mouse.get_pos())
         if active:
-            bg, border, ink = ACCENT, ACCENT, INPUT_BG
+            bg, border, ink = (41, 64, 58), ACCENT, TEXT
         elif self._hover:
             bg, border, ink = (43, 62, 56), (114, 150, 132), TEXT
         else:
             bg, border, ink = (29, 43, 41), (65, 87, 77), MUTED
         rounded_rect(surface, self.rect, bg, 9, 1, border)
+        if active:
+            pygame.draw.rect(surface, ACCENT,
+                             (self.rect.x + 12, self.rect.bottom - 3,
+                              self.rect.w - 24, 2), border_radius=1)
         draw_text(surface, self.text, self.rect.center,
                   FONT_SMALL, ink, anchor="center", max_width=self.rect.w - 12)
 
