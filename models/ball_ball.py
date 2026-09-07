@@ -14,6 +14,9 @@ from core import display
 from core.fonts import FONT_BIG, FONT_SMALL, FONT_TINY
 from effects.particles import spawn_impact_particles
 from models.base import BaseModel
+from presentation.impact_motion import (SceneCamera, draw_scene_explanation,
+                                        fitted_camera, flow_dots, focus_strength,
+                                        stage_progress)
 from render.energy import EnergyState, draw_energy_ledger
 from render.primitives import draw_arrow, draw_text, rounded_rect
 from render.text import clipped
@@ -161,6 +164,14 @@ class BallBallCollision(BaseModel):
         if self.last_result:
             initial = self.last_result["ke_before"]
             loss = self.last_result["collision_energy_loss"]
+            if self.phase == 'impact_explain':
+                r = self.last_result
+                p = stage_progress(self.explain_elapsed, 3.0, 2)
+                before1 = .5 * m1 * r['u1'] ** 2
+                before2 = .5 * m2 * r['u2'] ** 2
+                ke1 = before1 + (ke1 - before1) * p
+                ke2 = before2 + (ke2 - before2) * p
+                loss *= p
         else:
             initial = ke1 + ke2
             loss = 0.0
@@ -250,18 +261,18 @@ class BallBallCollision(BaseModel):
         if self.last_result:
             from presentation.impact_panel import draw_impact_panel
             r = self.last_result
+            m1, m2 = self.sliders['m1'].value, self.sliders['m2'].value
             draw_impact_panel(display.screen, rect,
                 self.explain_elapsed if self.phase == 'impact_explain' else 0.0, 3.0,
                 [('左球', r['u1'], r['v1']), ('右球', r['u2'], r['v2'])],
-                ['两球受到大小相等、方向相反的冲量',
-                 f'左球冲量：{format_sig3(r["impulse"])} N·s',
-                 f'右球冲量：{format_sig3(-r["impulse"])} N·s',
-                 f'总动量：{format_sig3(r["p_before"])} → {format_sig3(r["p_after"])} kg·m/s',
-                 '只有等质量且 e=1 时才直接交换速度'],
-                ['碰前动能 = 碰后动能 + 碰撞耗散',
-                 f'动能：{format_sig3(r["ke_before"])} → {format_sig3(r["ke_after"])} J',
-                 f'耗散：{format_sig3(r["collision_energy_loss"])} J',
-                 '讲解结束后自动继续运动'])
+                impulses=(r['impulse'], -r['impulse']),
+                momenta=[('左球 m1v1', m1*r['u1'], m1*r['v1']),
+                         ('右球 m2v2', m2*r['u2'], m2*r['v2'])],
+                conserved=('总动量', r['p_before'], r['p_after'], 'kg·m/s'),
+                energy_parts=[('左球动能', .5*m1*r['u1']**2, .5*m1*r['v1']**2),
+                              ('右球动能', .5*m2*r['u2']**2, .5*m2*r['v2']**2),
+                              ('碰撞耗散', 0.0, r['collision_energy_loss'])],
+                active=self.phase == 'impact_explain', running=self.running)
             return
         draw_text(display.screen, self.summary_line(), (rect.x + 2, rect.y + 2),
                   FONT_TINY, MUTED, max_width=rect.w - 4)
@@ -282,18 +293,38 @@ class BallBallCollision(BaseModel):
         with clipped(display.screen, pygame.Rect(LAYOUT.scene)):
             self._draw_scene_contents()
 
+    def scene_camera(self):
+        origin = (LAYOUT.scene_x + int(LAYOUT.scene_w * 0.44),
+                  LAYOUT.scene_y + int(LAYOUT.scene_h * 0.56))
+        scale = 92.0
+        if self.phase != 'impact_explain':
+            return SceneCamera(origin, scale, 1.0)
+        r = self.BALL_RADIUS_WORLD
+        return fitted_camera(LAYOUT.scene, origin, scale,
+                             (self.last_result['contact_x'], 0.0),
+                             (self.x1-r, -r, self.x2+r, r),
+                             1.0 + .24 * focus_strength(self.explain_elapsed, 9.0),
+                             (190, 110, 190, 55))
+
+    def explanation_velocities(self):
+        if self.phase != 'impact_explain':
+            return self.v1, self.v2
+        p = stage_progress(self.explain_elapsed, 3.0, 0)
+        r = self.last_result
+        return r['u1'] + (r['v1'] - r['u1']) * p, r['u2'] + (r['v2'] - r['u2']) * p
+
     def _draw_scene_contents(self):
         m1 = self.sliders["m1"].value
         m2 = self.sliders["m2"].value
-        scale = 92.0
-        origin_x = LAYOUT.scene_x + int(LAYOUT.scene_w * 0.44)
-        center_y = LAYOUT.scene_y + int(LAYOUT.scene_h * 0.56)
+        camera = self.scene_camera()
+        scale = camera.scale
+        center_y = round(camera.origin[1])
 
         radius_px = int(self.BALL_RADIUS_WORLD * scale)
         platform_y = center_y + radius_px + 14
 
         def w2s(x, y=0.0):
-            return int(origin_x + x * scale), int(center_y - y * scale)
+            return camera.point(x, -y)
 
         display.screen.blit(display.STATIC_BG, (0, 0))
         scene_left, scene_right = LAYOUT.scene_x, LAYOUT.scene_x + LAYOUT.scene_w
@@ -377,8 +408,7 @@ class BallBallCollision(BaseModel):
 
             pygame.draw.circle(display.screen, (255, 255, 255),
                                (px - radius // 3 - 1, py - radius // 3 - 1), max(2, radius // 8))
-            label_x = px - 18 if label == '球 1' else px + 18
-            draw_text(display.screen, label, (label_x, py - radius - 38), FONT_SMALL, edge_color, anchor="midbottom")
+            draw_text(display.screen, label, (px, py + 4), FONT_TINY, (8, 26, 42), anchor="center")
             draw_text(display.screen, f"m={format_sig3(mass)} kg", (px, py + radius + 18), FONT_TINY, MUTED,
                       anchor="topright" if label == '球 1' else "topleft")
 
@@ -388,22 +418,34 @@ class BallBallCollision(BaseModel):
 
 
         def draw_velocity(pos, velocity, label):
+            # Two separate lanes remain readable when both velocities point
+            # right (or left) and the balls are touching during explanation.
+            y = pos[1] - radius_px - (18 if label == 'v1' else 60)
             if abs(velocity) < 0.01:
-                draw_text(display.screen, f"{label}=0", (pos[0], pos[1] - radius_px - 15),
+                draw_text(display.screen, f"{label}=0", (pos[0], y),
                           FONT_SMALL, GREEN, anchor="midbottom")
                 return
             direction = 1 if velocity > 0 else -1
             arrow_len = clamp(abs(velocity) * 10.0, 35, 150)
-            y = pos[1] - radius_px - 18
-
             finish = (int(pos[0] + direction * arrow_len), y)
             draw_arrow(display.screen, (pos[0], y), finish, GREEN, 3)
+            if self.phase == 'impact_explain':
+                flow_dots(display.screen, (pos[0], y), finish, self.explain_elapsed,
+                          GREEN, count=2, radius=2)
             draw_text(display.screen, f"{label}={format_sig3(velocity)} m/s",
                       (finish[0] + (10 if direction > 0 else -10), y - 12), FONT_SMALL, GREEN,
                       anchor="topleft" if direction > 0 else "topright")
 
-        draw_velocity(pos1, self.v1, "v1")
-        draw_velocity(pos2, self.v2, "v2")
+        if self.phase != 'impact_explain' or self.explain_elapsed < 3.0:
+            v1, v2 = self.explanation_velocities()
+            draw_velocity(pos1, v1, "v1")
+            draw_velocity(pos2, v2, "v2")
+        if self.phase == 'impact_explain':
+            r = self.last_result
+            draw_scene_explanation(display.screen, LAYOUT.scene, self.explain_elapsed, 3.0,
+                [pos1, pos2], [radius_px, radius_px], (r['impulse'], -r['impulse']),
+                (.5*m1*r['u1']**2, .5*m2*r['u2']**2),
+                (.5*m1*r['v1']**2, .5*m2*r['v2']**2), running=self.running)
 
 
         if self.phase != 'impact_explain' and self.flash > 0 and self.last_result:

@@ -16,6 +16,7 @@ from effects.particles import spawn_impact_particles
 from models.base import BaseModel
 from models.collision_data import ConservationState, CollisionSnapshot
 from presentation.collision_explainer import CollisionExplainer
+from presentation.impact_motion import draw_scene_explanation, fitted_camera, flow_dots
 from replay.timeline import ReplayFrame, ReplayTimeline
 from render.energy import EnergyState
 from render.primitives import draw_arrow, draw_text, rounded_rect
@@ -877,14 +878,11 @@ class BallHitsRod(BaseModel):
         with clipped(display.screen, pygame.Rect(LAYOUT.scene)):
             self._draw_scene_contents()
 
-    def _draw_scene_contents(self):
-        m = self.sliders["m"].value
+    def scene_camera(self, explainer=None):
+        """Frame pivot, complete rod, ball and labels throughout the zoom."""
         L = self.sliders["L"].value
         h = self.current_h()
-        I = self.inertia()
         rb = self.ball_radius_world()
-
-        # 物理长度整体缩小为原版的 1/3，但画面中的视觉尺寸保持接近原版。
         physical_scale_ratio = 3.0
         equivalent_old_L = physical_scale_ratio * L
         old_scale = min(
@@ -895,6 +893,17 @@ class BallHitsRod(BaseModel):
         scale = physical_scale_ratio * old_scale
         pivot = (LAYOUT.scene_x + int(LAYOUT.scene_w * 0.63), LAYOUT.scene_y + int(LAYOUT.scene_h * 0.30))
         scale = min(scale, max(1.0, (LAYOUT.scene_y + LAYOUT.scene_h - pivot[1] - 30) / L))
+        zoom = 1.0 + .24 * explainer.focus_strength() if explainer else 1.0
+        return fitted_camera(LAYOUT.scene, pivot, scale, (0.0, h),
+                             (-.38 * L, 0.0, .22 + 2 * rb, L), zoom,
+                             (36, 48, 230, 30))
+
+    def _draw_scene_contents(self):
+        m = self.sliders["m"].value
+        L = self.sliders["L"].value
+        h = self.current_h()
+        I = self.inertia()
+        rb = self.ball_radius_world()
 
         explainer = (
             self.impact_explainer
@@ -945,22 +954,19 @@ class BallHitsRod(BaseModel):
             )
         else:
             display_account = self.energy_breakdown()
+        if explainer:
+            parts = explainer.energy_parts_display()
+            potential = explainer.snapshot.potential
+            mechanical = parts['rod'] + parts['ball'] + potential
+            display_account = EnergyState(
+                initial=parts['total'] + potential, mechanical=mechanical,
+                rod_kinetic=parts['rod'], ball_kinetic=parts['ball'],
+                potential=potential, collision_loss=parts['loss'],
+                residual=parts['total'] + potential - mechanical - parts['loss'])
 
-        # A stable full-rod view keeps the pivot, tip and contact visible.
-        zoom = 1.0
-        if zoom > 1.0 and self.camera_focus is not None:
-            focus_x, focus_y = self.camera_focus
-            focus_screen = (pivot[0], LAYOUT.scene_y + int(LAYOUT.scene_h * 0.88))
-
-            def w2s(x, y):
-                return (
-                    int(focus_screen[0] + (x - focus_x) * scale * zoom),
-                    int(focus_screen[1] + (y - focus_y) * scale * zoom),
-                )
-        else:
-
-            def w2s(x, y):
-                return int(pivot[0] + x * scale), int(pivot[1] + y * scale)
+        camera = self.scene_camera(explainer)
+        scale = camera.scale
+        w2s = camera.point
 
         scene_pivot = w2s(0.0, 0.0)
 
@@ -1086,26 +1092,17 @@ class BallHitsRod(BaseModel):
         pygame.draw.circle(display.screen, ACCENT_2, (cpx, cpy), 9, 2)
         pygame.draw.circle(display.screen, (255, 255, 255), (cpx, cpy), 4)
 
-        if explainer and explainer.phase in ("velocity", "momentum"):
+        if explainer and explainer.phase == "velocity":
             tangent_len = clamp(abs(display_contact_speed) * scale * 0.07, 18, 105)
             tangent_direction = 1 if display_contact_speed >= 0 else -1
             tangent_end = (cpx + int(tangent_direction * tangent_len), cpy)
             draw_arrow(display.screen, (cpx, cpy), tangent_end, ACCENT_2, 3)
+            flow_dots(display.screen, (cpx, cpy), tangent_end, explainer.elapsed,
+                      ACCENT_2, count=2, radius=2)
             draw_text(display.screen, f"hω={format_sig3(display_contact_speed)} m/s",
                       (tangent_end[0] + (7 if tangent_direction > 0 else -7), cpy + 8),
                       FONT_SMALL, ACCENT_2,
                       anchor="topleft" if tangent_direction > 0 else "topright")
-
-        if explainer and explainer.phase == "momentum":
-            impulse = explainer.impulse_display()
-            impulse_len = clamp(abs(impulse) * scale * 0.11, 8, 135)
-            impulse_direction = 1 if impulse >= 0 else -1
-            impulse_end = (cpx + int(impulse_direction * impulse_len), cpy)
-            draw_arrow(display.screen, (cpx, cpy), impulse_end, ACCENT_2, 4)
-            draw_text(display.screen, f"J={format_sig3(impulse)} N*s",
-                      (impulse_end[0] + (8 if impulse_direction > 0 else -8), cpy - 18),
-                      FONT_SMALL, ACCENT_2,
-                      anchor="topleft" if impulse_direction > 0 else "topright")
 
         if explainer and explainer.phase == "energy":
             loss_ratio = clamp(
@@ -1196,12 +1193,15 @@ class BallHitsRod(BaseModel):
                 scale=0.85,
             )
 
-        if abs(display_ball_v) > 0.01:
+        if abs(display_ball_v) > 0.01 and (not explainer or explainer.phase == "velocity"):
             arrow_len = clamp(abs(display_ball_v) * scale * 0.07, 35, 150)
             direction = 1 if display_ball_v > 0 else -1
             ay = ball_pos[1] - br - 12
             finish = (int(ball_pos[0] + direction * arrow_len), ay)
             draw_arrow(display.screen, (ball_pos[0], ay), finish, GREEN, 3)
+            if explainer:
+                flow_dots(display.screen, (ball_pos[0], ay), finish, explainer.elapsed,
+                          GREEN, count=2, radius=2)
             draw_text(display.screen, f"v={format_sig3(display_ball_v)} m/s",
                       (finish[0] + (10 if direction > 0 else -10), ay - 12), FONT_SMALL,
                       GREEN, anchor="topleft" if direction > 0 else "topright")
@@ -1211,6 +1211,11 @@ class BallHitsRod(BaseModel):
                       FONT_SMALL, ACCENT_3)
 
         if explainer:
+            s = explainer.snapshot
+            draw_scene_explanation(display.screen, LAYOUT.scene, explainer.elapsed,
+                explainer.PHASE_DURATION, [(cpx, cpy), ball_pos], [10, br],
+                (-s.impulse, s.impulse), (s.rod_ke_before, s.ball_ke_before),
+                (s.rod_ke_after, s.ball_ke_after), running=self.running)
             rod_L_now = explainer.rod_L_display()
             ball_MRV_now = explainer.ball_MRV_display()
             display_parts = explainer.energy_parts_display()
@@ -1286,7 +1291,7 @@ class BallHitsRod(BaseModel):
         rect = pygame.Rect(rect)
         explainer = getattr(self, "_analysis_explainer", None)
         if explainer is not None:
-            explainer.draw(display.screen, rect)
+            explainer.draw(display.screen, rect, running=self.running)
             return
         if getattr(self, "_analysis_show_energy", False):
             snapshot = (self.replay_collision_snapshot()

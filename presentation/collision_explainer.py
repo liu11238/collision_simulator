@@ -381,19 +381,18 @@ class CollisionExplainer:
                   (rect.centerx, rect.bottom - 22), FONT_SMALL, ACCENT_3,
                   anchor="center")
 
-    def draw(self, surface, rect):
+    def draw(self, surface, rect, running=True):
         """将当前讲解阶段绘制为过程图。"""
         from presentation.impact_panel import draw_impact_panel
         s = self.snapshot
         draw_impact_panel(surface, rect, self.elapsed, self.PHASE_DURATION,
             [('杆接触点 hω', s.contact_before, s.contact_after),
              ('小球 v', s.u_before, s.v_after)],
-            ['接触冲量改变球速，同时改变杆的转速',
-             f'小球获得冲量 J = {format_sig3(s.impulse)} N·s',
-             '杆受到反向冲量；绕轴总角动量守恒',
-             f'总角动量：{format_sig3(s.total_L_before)} → {format_sig3(s.total_L_after)}',
-             '定轴有外力：球杆总线动量不必守恒'],
-            ['碰前动能 = 碰后动能 + 碰撞耗散',
-             f'总动能：{format_sig3(s.ke_before)} → {format_sig3(s.ke_after)} J',
-             f'碰撞耗散：{format_sig3(s.collision_energy_loss)} J',
-             'e=1 时完全弹性；e<1 时部分机械能耗散'])
+            impulses=(-s.impulse, s.impulse),
+            momenta=[('杆 Iω', s.rod_L_before, s.rod_L_after),
+                     ('球 mhv', s.ball_MRV_before, s.ball_MRV_after)],
+            conserved=('绕轴角动量', s.total_L_before, s.total_L_after, 'kg·m²/s'),
+            energy_parts=[('杆动能', s.rod_ke_before, s.rod_ke_after),
+                          ('球动能', s.ball_ke_before, s.ball_ke_after),
+                          ('碰撞耗散', 0.0, max(0.0, s.collision_energy_loss))],
+            running=running)
