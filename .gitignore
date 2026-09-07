@@ -224,3 +224,6 @@ __marimo__/
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+# 本地打包脚本（不参与版本控制）
+build.bat

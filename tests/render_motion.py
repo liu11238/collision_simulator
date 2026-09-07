@@ -58,6 +58,21 @@ def render_motion(destination, fps=30):
                     after_frames += 1
                     if after_frames >= fps:
                         break
+            # End each model segment with an actual Replay pass across the
+            # point event, including the deterministic blue impact decay.
+            result = model.last_result
+            impact_time = (result['impact_time'] if isinstance(result, dict)
+                           else result.impact_time)
+            model.seek_replay(max(0.0, impact_time - 0.22), side='after')
+            model.replay.playing = True
+            for _ in range(int(0.65 * fps)):
+                model.update_inputs(1 / fps)
+                model.step(1 / fps)
+                display.advance_ambience(1 / fps)
+                display.begin_frame()
+                model.draw_scene()
+                model.draw_interface()
+                process.stdin.write(pygame.image.tobytes(display.screen, 'RGB'))
     finally:
         process.stdin.close()
         status = process.wait()

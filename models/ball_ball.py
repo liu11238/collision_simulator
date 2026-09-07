@@ -17,9 +17,11 @@ from models.base import BaseModel
 from presentation.impact_motion import (SceneCamera, draw_scene_explanation,
                                         fitted_camera, flow_dots, focus_strength,
                                         stage_progress)
+from replay.timeline import ReplayFrame, ReplayTimeline
 from render.energy import EnergyState, draw_energy_ledger
 from render.primitives import (draw_arrow, draw_matte_ball, draw_soft_shadow,
                                draw_text, rounded_rect)
+from render.replay_fx import draw_impact_fx
 from render.text import clipped
 from utils import clamp, format_sig3, lerp_color
 
@@ -28,6 +30,12 @@ class BallBallCollision(BaseModel):
     short_name = "双球模型"
     BALL_RADIUS_WORLD = 0.34
     MAX_SUBSTEP = 0.0025
+
+    def __init__(self):
+        self.replay = ReplayTimeline()
+        self.replay_mode = False
+        self.replay_side = "after"
+        super().__init__()
 
     def build_controls(self):
         self.add_control("m1", "左球质量 m1", 0, 0, 0.05, 10.0, 1.00, " kg", 3)
@@ -47,6 +55,9 @@ class BallBallCollision(BaseModel):
         gap = self.sliders["gap"].value
         r = self.BALL_RADIUS_WORLD
         self.running = keep_running
+        self.replay.clear()
+        self.replay_mode = False
+        self.replay_side = "after"
         self.phase = "ready"
         self.explain_elapsed = 0.0
 
@@ -54,6 +65,8 @@ class BallBallCollision(BaseModel):
         self.x2 = gap / 2.0 + r
         self.v1 = u1
         self.v2 = u2
+        self.initial_energy = (0.5 * self.sliders["m1"].value * u1 * u1
+                               + 0.5 * self.sliders["m2"].value * u2 * u2)
         self.t = 0.0
 
         self.collided = False
@@ -65,11 +78,102 @@ class BallBallCollision(BaseModel):
         self.particles.clear()
         self.shockwaves.clear()
         self.notice = ""
+        self.replay.record_initial(self._replay_frame())
+
+    def _replay_frame(self, *, phase=None, left_x=None, right_x=None,
+                      left_v=None, right_v=None, collision=None,
+                      impact_strength=0.0, impact_flash=0.0):
+        """Copy the two-ball display state into an immutable replay frame."""
+        left_x = self.x1 if left_x is None else left_x
+        right_x = self.x2 if right_x is None else right_x
+        left_v = self.v1 if left_v is None else left_v
+        right_v = self.v2 if right_v is None else right_v
+        phase = self.phase if phase is None else phase
+        m1 = self.sliders["m1"].value
+        m2 = self.sliders["m2"].value
+        left_ke = 0.5 * m1 * left_v * left_v
+        right_ke = 0.5 * m2 * right_v * right_v
+        loss = 0.0
+        if phase == "after":
+            source = collision if collision is not None else self.last_result
+            loss = source["collision_energy_loss"] if source else 0.0
+        total = left_ke + right_ke
+        return ReplayFrame(
+            time=self.t,
+            phase=phase,
+            left_x=left_x,
+            right_x=right_x,
+            left_v=left_v,
+            right_v=right_v,
+            mechanical_energy=total,
+            total_energy=total,
+            left_kinetic_energy=left_ke,
+            right_kinetic_energy=right_ke,
+            rod_kinetic_energy=left_ke,
+            ball_kinetic_energy=right_ke,
+            collision_energy_loss=loss,
+            energy_residual=self.initial_energy - total - loss,
+            linear_momentum=m1 * left_v + m2 * right_v,
+            collision=collision,
+            impact_strength=impact_strength,
+            impact_flash=impact_flash,
+        )
+
+    def _record_replay_sample(self, force=False):
+        self.replay.record_sample(self._replay_frame(), force=force)
+
+    def replay_frame(self, time=None, side=None):
+        if not self.replay_mode:
+            return None
+        return self.replay.frame_at(
+            self.replay.cursor if time is None else time,
+            side=side or self.replay_side,
+        )
+
+    def replay_collision_snapshot(self, frame=None):
+        if frame is None:
+            frame = self.replay_frame()
+        if frame is None:
+            return None
+        if frame.collision is not None:
+            return frame.collision
+        cutoff = self.replay.cursor + 1e-10
+        for candidate in reversed(self.replay.frames):
+            if candidate.time <= cutoff and candidate.collision is not None:
+                return candidate.collision
+        return None
+
+    def seek_replay(self, time, side="after"):
+        if not self.replay.has_frames:
+            return None
+        self.replay_mode = True
+        self.replay_side = side
+        self.replay.playing = False
+        return self.replay.seek(time, side=side)
+
+    def toggle_replay(self):
+        if not self.replay.has_frames:
+            return False
+        self.replay_mode = True
+        return self.replay.toggle()
+
+    def leave_replay(self):
+        self.replay_mode = False
+        self.replay.playing = False
+        self.replay.go_live()
+
+    def replay_playback_step(self, dt):
+        if not self.replay_mode:
+            return None
+        return self.replay.step_playback(dt)
 
     def can_collide(self):
         return self.v1 > self.v2 + 1e-10
 
     def start_pause(self):
+        if self.replay_mode:
+            self.toggle_replay()
+            return
         if self.phase == "impact_explain":
             self.phase = "after"
             return
@@ -94,11 +198,16 @@ class BallBallCollision(BaseModel):
 
             return
         r = self.BALL_RADIUS_WORLD
-        self.x1 = -r
-        self.x2 = r
+        surface_gap = (self.x2 - r) - (self.x1 + r)
+        flight_time = max(0.0, surface_gap / (self.v1 - self.v2))
+        self.x1 += self.v1 * flight_time
+        self.x2 += self.v2 * flight_time
+        self.t += flight_time
         self.phase = "moving"
-
-        self.do_collision(0.0)
+        contact_x = ((self.x1 + r) + (self.x2 - r)) / 2.0
+        self.x1 = contact_x - r
+        self.x2 = contact_x + r
+        self.do_collision(contact_x)
         self.running = True
 
     def do_collision(self, contact_x):
@@ -143,6 +252,18 @@ class BallBallCollision(BaseModel):
             "impact_time": self.t,
             "contact_x": contact_x,
         }
+        self.replay.record_collision(
+            self._replay_frame(
+                phase="moving", left_v=u1, right_v=u2,
+                collision=self.last_result,
+                impact_strength=abs(relative_before), impact_flash=1.0,
+            ),
+            self._replay_frame(
+                phase="after", left_v=v1, right_v=v2,
+                collision=self.last_result,
+                impact_strength=abs(relative_before), impact_flash=1.0,
+            ),
+        )
         spawn_impact_particles(self.particles, self.shockwaves, contact_x, 0.0,
                                relative_before, symmetric=True)
         if self.toggles['explain'].value:
@@ -160,6 +281,16 @@ class BallBallCollision(BaseModel):
             self.phase = 'after'
 
     def energy_state_for_display(self):
+        replay_frame = self.replay_frame()
+        if replay_frame is not None:
+            return EnergyState(
+                initial=self.initial_energy,
+                mechanical=replay_frame.total_energy,
+                rod_kinetic=replay_frame.left_kinetic_energy,
+                ball_kinetic=replay_frame.right_kinetic_energy,
+                collision_loss=replay_frame.collision_energy_loss,
+                residual=replay_frame.energy_residual,
+            )
         m1 = self.sliders["m1"].value
         m2 = self.sliders["m2"].value
         ke1 = 0.5 * m1 * self.v1 * self.v1
@@ -206,6 +337,9 @@ class BallBallCollision(BaseModel):
                 self.do_collision(contact_x)
 
     def step(self, dt):
+        if self.replay_mode:
+            self.replay_playback_step(dt)
+            return
         if not self.running:
             return
         if self.phase == 'impact_explain':
@@ -235,6 +369,7 @@ class BallBallCollision(BaseModel):
 
         if len(self.trail2) > 85:
             self.trail2.pop(0)
+        self._record_replay_sample()
 
     def formula_lines(self):
         return (
@@ -246,8 +381,15 @@ class BallBallCollision(BaseModel):
         return pygame.Rect(LAYOUT.formula)
 
     def interface_state(self):
-        return ({"ready": "待开始", "moving": "两球运动中", "after": "碰撞后运动", "impact_explain": "慢放讲解（物理冻结）"}
-                .get(self.phase, self.phase), self.t)
+        frame = self.replay_frame()
+        phase = frame.phase if frame is not None else self.phase
+        state = {
+            "ready": "待开始",
+            "moving": "碰撞前回放" if frame is not None else "两球运动中",
+            "after": "碰撞后回放" if frame is not None else "碰撞后运动",
+            "impact_explain": "慢放讲解（物理冻结）",
+        }.get(phase, phase)
+        return state, frame.time if frame is not None else self.t
 
     def summary_line(self):
         return (f"m1={format_sig3(self.sliders['m1'].value)}  u1={format_sig3(self.sliders['u1'].value)}  "
@@ -261,9 +403,12 @@ class BallBallCollision(BaseModel):
 
     def draw_analysis_panel(self, rect):
         rect = pygame.Rect(rect)
-        if self.last_result:
+        replay_frame = self.replay_frame()
+        replay_result = self.replay_collision_snapshot() if self.replay_mode else None
+        result = replay_result if self.replay_mode else self.last_result
+        if result:
             from presentation.impact_panel import draw_impact_panel
-            r = self.last_result
+            r = result
             m1, m2 = self.sliders['m1'].value, self.sliders['m2'].value
             draw_impact_panel(display.screen, rect,
                 self.explain_elapsed if self.phase == 'impact_explain' else 0.0, 3.0,
@@ -275,13 +420,15 @@ class BallBallCollision(BaseModel):
                 energy_parts=[('左球动能', .5*m1*r['u1']**2, .5*m1*r['v1']**2),
                               ('右球动能', .5*m2*r['u2']**2, .5*m2*r['v2']**2),
                               ('碰撞耗散', 0.0, r['collision_energy_loss'])],
-                active=self.phase == 'impact_explain', running=self.running)
+                active=self.phase == 'impact_explain' and not self.replay_mode,
+                running=self.running)
             return
         draw_text(display.screen, self.summary_line(), (rect.x + 2, rect.y + 2),
                   FONT_TINY, MUTED, max_width=rect.w - 4)
 
         # v1-v2 判定集中在分析区；一旦开始运行仍保留参数摘要。
-        if self.phase == "ready":
+        panel_phase = replay_frame.phase if replay_frame is not None else self.phase
+        if panel_phase in {"ready", "moving"}:
             relation = "会相撞" if self.v1 > self.v2 else "不会相撞"
             delta_v = self.v1 - self.v2
             draw_text(display.screen, "碰撞判定",
@@ -300,7 +447,7 @@ class BallBallCollision(BaseModel):
         origin = (LAYOUT.scene_x + int(LAYOUT.scene_w * 0.44),
                   LAYOUT.scene_y + int(LAYOUT.scene_h * 0.56))
         scale = 92.0
-        if self.phase != 'impact_explain':
+        if self.phase != 'impact_explain' or self.replay_mode:
             return SceneCamera(origin, scale, 1.0)
         r = self.BALL_RADIUS_WORLD
         return fitted_camera(LAYOUT.scene, origin, scale,
@@ -319,6 +466,16 @@ class BallBallCollision(BaseModel):
     def _draw_scene_contents(self):
         m1 = self.sliders["m1"].value
         m2 = self.sliders["m2"].value
+        replay_frame = self.replay_frame()
+        replay_active = replay_frame is not None
+        display_x1 = replay_frame.left_x if replay_active else self.x1
+        display_x2 = replay_frame.right_x if replay_active else self.x2
+        display_v1 = replay_frame.left_v if replay_active else self.v1
+        display_v2 = replay_frame.right_v if replay_active else self.v2
+        display_phase = replay_frame.phase if replay_active else self.phase
+        display_result = (self.replay_collision_snapshot(replay_frame)
+                          if replay_active else self.last_result)
+        explaining = self.phase == 'impact_explain' and not replay_active
         camera = self.scene_camera()
         scale = camera.scale
         center_y = round(camera.origin[1])
@@ -346,9 +503,9 @@ class BallBallCollision(BaseModel):
             draw_text(display.screen, f"{world_x}", (sx, center_y + 12), FONT_TINY, MUTED, anchor="midtop")
 
 
-        if not self.collided:
-            left_surface = self.x1 + self.BALL_RADIUS_WORLD
-            right_surface = self.x2 - self.BALL_RADIUS_WORLD
+        if display_phase in {'ready', 'moving'}:
+            left_surface = display_x1 + self.BALL_RADIUS_WORLD
+            right_surface = display_x2 - self.BALL_RADIUS_WORLD
             if right_surface > left_surface:
                 p1 = w2s(left_surface, -0.72)
                 p2 = w2s(right_surface, -0.72)
@@ -359,10 +516,23 @@ class BallBallCollision(BaseModel):
                 draw_text(display.screen, f"当前间距={format_sig3(right_surface - left_surface)} m",
                           ((p1[0] + p2[0]) // 2, p1[1] + 10), FONT_SMALL, MUTED, anchor="midtop")
 
-        if self.trail1:
+        if replay_active:
+            trail_start = replay_frame.time - 0.8
+            replay_history = [
+                item for item in self.replay.frames
+                if trail_start <= item.time <= replay_frame.time + 1e-10
+            ]
+            trail1 = [item.left_x for item in replay_history
+                      if abs(item.left_v) > 0.03]
+            trail2 = [item.right_x for item in replay_history
+                      if abs(item.right_v) > 0.03]
+        else:
+            trail1, trail2 = self.trail1, self.trail2
+
+        if trail1:
             display.trail_surf_1.fill((0, 0, 0, 0))
-            for i, x in enumerate(self.trail1):
-                p = i / max(1, len(self.trail1) - 1)
+            for i, x in enumerate(trail1):
+                p = i / max(1, len(trail1) - 1)
 
                 pos = w2s(x)
                 if -100 <= pos[0] <= LAYOUT.width + 100:
@@ -371,11 +541,11 @@ class BallBallCollision(BaseModel):
                     pygame.draw.circle(display.trail_surf_1, (*BALL1_COLOR, int(10 + 70 * p)), pos, r)
             display.screen.blit(display.trail_surf_1, (0, 0))
 
-        if self.trail2:
+        if trail2:
             display.trail_surf_2.fill((0, 0, 0, 0))
 
-            for i, x in enumerate(self.trail2):
-                p = i / max(1, len(self.trail2) - 1)
+            for i, x in enumerate(trail2):
+                p = i / max(1, len(trail2) - 1)
                 pos = w2s(x)
                 if -100 <= pos[0] <= LAYOUT.width + 100:
                     r = max(2, int(radius_px * (0.12 + 0.26 * p)))
@@ -384,7 +554,8 @@ class BallBallCollision(BaseModel):
 
             display.screen.blit(display.trail_surf_2, (0, 0))
 
-        if self.phase != 'impact_explain' and (self.particles or self.shockwaves):
+        if (not replay_active and self.phase != 'impact_explain'
+                and (self.particles or self.shockwaves)):
             display.particle_surf.fill((0, 0, 0, 0))
             for particle in self.particles:
                 particle.draw(display.particle_surf, w2s, streak_scale=5.5)
@@ -405,7 +576,7 @@ class BallBallCollision(BaseModel):
             draw_text(display.screen, f"m={format_sig3(mass)} kg", (px, py + radius + 18), FONT_TINY, MUTED,
                       anchor="topright" if label == '球 1' else "topleft")
 
-        pos1, pos2 = w2s(self.x1), w2s(self.x2)
+        pos1, pos2 = w2s(display_x1), w2s(display_x2)
         draw_ball(pos1, radius_px, BALL1_COLOR, BALL1_EDGE, BALL1_GLOW, "球 1", m1)
         draw_ball(pos2, radius_px, BALL2_COLOR, BALL2_EDGE, BALL2_GLOW, "球 2", m2)
 
@@ -422,18 +593,19 @@ class BallBallCollision(BaseModel):
             arrow_len = clamp(abs(velocity) * 10.0, 35, 150)
             finish = (int(pos[0] + direction * arrow_len), y)
             draw_arrow(display.screen, (pos[0], y), finish, GREEN, 3)
-            if self.phase == 'impact_explain':
+            if explaining:
                 flow_dots(display.screen, (pos[0], y), finish, self.explain_elapsed,
                           GREEN, count=2, radius=2)
             draw_text(display.screen, f"{label}={format_sig3(velocity)} m/s",
                       (finish[0] + (10 if direction > 0 else -10), y - 12), FONT_SMALL, GREEN,
                       anchor="topleft" if direction > 0 else "topright")
 
-        if self.phase != 'impact_explain' or self.explain_elapsed < 3.0:
-            v1, v2 = self.explanation_velocities()
+        if not explaining or self.explain_elapsed < 3.0:
+            v1, v2 = ((display_v1, display_v2) if replay_active
+                      else self.explanation_velocities())
             draw_velocity(pos1, v1, "v1")
             draw_velocity(pos2, v2, "v2")
-        if self.phase == 'impact_explain':
+        if explaining:
             r = self.last_result
             draw_scene_explanation(display.screen, LAYOUT.scene, self.explain_elapsed, 3.0,
                 [pos1, pos2], [radius_px, radius_px], (r['impulse'], -r['impulse']),
@@ -441,7 +613,8 @@ class BallBallCollision(BaseModel):
                 (.5*m1*r['v1']**2, .5*m2*r['v2']**2), running=self.running)
 
 
-        if self.phase != 'impact_explain' and self.flash > 0 and self.last_result:
+        if (not replay_active and self.phase != 'impact_explain'
+                and self.flash > 0 and self.last_result):
             contact = w2s(self.last_result["contact_x"])
             display.flash_surf.fill((0, 0, 0, 0))
             f = self.flash
@@ -453,13 +626,18 @@ class BallBallCollision(BaseModel):
             pygame.draw.circle(display.flash_surf, (120, 180, 255, int(a0 * 0.20)), contact, r0 + int(55 * f))
             display.screen.blit(display.flash_surf, (0, 0))
 
-        p_now = m1 * self.v1 + m2 * self.v2
-        ke1 = 0.5 * m1 * self.v1 * self.v1
-        ke2 = 0.5 * m2 * self.v2 * self.v2
+        if replay_active and display_result is not None:
+            contact = w2s(display_result["contact_x"])
+            draw_impact_fx(display.screen, contact, replay_frame.impact_flash,
+                           replay_frame.impact_strength)
+
+        p_now = m1 * display_v1 + m2 * display_v2
+        ke1 = 0.5 * m1 * display_v1 * display_v1
+        ke2 = 0.5 * m2 * display_v2 * display_v2
         current_lines = [
-            f"左球速度 v1 = {format_sig3(self.v1)} m/s",
-            f"右球速度 v2 = {format_sig3(self.v2)} m/s",
-            f"相对速度 v1-v2 = {format_sig3(self.v1 - self.v2)} m/s",
+            f"左球速度 v1 = {format_sig3(display_v1)} m/s",
+            f"右球速度 v2 = {format_sig3(display_v2)} m/s",
+            f"相对速度 v1-v2 = {format_sig3(display_v1 - display_v2)} m/s",
             f"质心速度 Vcm = {format_sig3(p_now / (m1 + m2))} m/s",
             f"左球动能 = {format_sig3(ke1)} J",
             f"右球动能 = {format_sig3(ke2)} J",
@@ -467,8 +645,8 @@ class BallBallCollision(BaseModel):
         ]
 
         collision_lines = None
-        if self.last_result:
-            r = self.last_result
+        if display_result:
+            r = display_result
             collision_lines = [
                 f"碰撞时刻 t = {format_sig3(r['impact_time'])} s",
                 f"恢复系数 e = {format_sig3(r['e'])}",

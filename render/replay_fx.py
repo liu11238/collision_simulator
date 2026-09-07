@@ -6,7 +6,10 @@ import math
 
 import pygame
 
-from config import ACCENT_2, ACCENT_3, RED
+from config import ACCENT_2, RED
+
+IMPACT_BLUE = (91, 181, 255)
+IMPACT_BLUE_SOFT = (145, 218, 255)
 
 
 def draw_impact_fx(surface, point, intensity, strength=1.0):
@@ -19,11 +22,12 @@ def draw_impact_fx(surface, point, intensity, strength=1.0):
     if intensity <= 1e-6:
         return
     x, y = int(point[0]), int(point[1])
-    radius = max(8, int(12 + 26 * intensity * max(0.5, strength)))
+    visual_strength = min(2.2, math.sqrt(max(0.5, strength)))
+    radius = max(8, int(14 + 24 * intensity * visual_strength))
     alpha = int(210 * intensity)
     layer = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
-    pygame.draw.circle(layer, (*ACCENT_2, alpha), (x, y), radius, 2)
-    pygame.draw.circle(layer, (*ACCENT_3, max(0, alpha // 2)), (x, y),
+    pygame.draw.circle(layer, (*IMPACT_BLUE, alpha), (x, y), radius, 2)
+    pygame.draw.circle(layer, (*IMPACT_BLUE_SOFT, max(0, alpha // 2)), (x, y),
                        max(3, radius // 3), 1)
     for index in range(12):
         angle = index * math.tau / 12.0 + 0.13
@@ -33,7 +37,7 @@ def draw_impact_fx(surface, point, intensity, strength=1.0):
                  int(y + math.sin(angle) * inner))
         end = (int(x + math.cos(angle) * outer),
                int(y + math.sin(angle) * outer))
-        pygame.draw.line(layer, (*ACCENT_2, alpha), start, end, 2)
+        pygame.draw.line(layer, (*IMPACT_BLUE_SOFT, alpha), start, end, 2)
     surface.blit(layer, (0, 0))
 
 

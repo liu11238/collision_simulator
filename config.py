@@ -531,6 +531,7 @@ BOTTOM_TIMELINE_Y = LAYOUT.timeline_rect[1] + 6
 BOTTOM_TIMELINE_W = LAYOUT.timeline_rect[2]
 BOTTOM_TIMELINE_LABEL_Y = LAYOUT.timeline_rect[1] + 5
 
-# Display-time collision replay semantics.  This is deliberately independent
-# from the physics integrator's clock.
-COLLISION_REPLAY_WINDOW = 0.15
+# 瞬时碰撞后的纯视觉衰减时长；不占用时间轴，也不冻结物理状态。
+IMPACT_REPLAY_FX_DURATION = 0.15
+# 旧扩展代码可能仍导入该名称；保留为视觉时长别名。
+COLLISION_REPLAY_WINDOW = IMPACT_REPLAY_FX_DURATION

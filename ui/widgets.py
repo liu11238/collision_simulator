@@ -145,25 +145,13 @@ class TimelineSlider:
             self.dragging = False
         return changed
 
-    def draw(self, surface, collision_times=(), collision_windows=()):
+    def draw(self, surface, collision_times=()):
         pygame.draw.line(surface, (41, 55, 53),
                          (self.rect.x, self.rect.centery),
                          (self.rect.right, self.rect.centery), 8)
         pygame.draw.line(surface, (69, 94, 89),
                          (self.rect.x, self.rect.centery),
                          (self.rect.right, self.rect.centery), 3)
-        for start, end in collision_windows:
-            x1 = self._x_for_value(start)
-            x2 = self._x_for_value(end)
-            band = pygame.Surface((max(1, x2 - x1), self.rect.h), pygame.SRCALPHA)
-            band.fill((255, 200, 70, 32))
-            surface.blit(band, (x1, self.rect.y))
-            pygame.draw.line(surface, (255, 220, 100),
-                             (x1, self.rect.y + 3),
-                             (x1, self.rect.bottom - 3), 1)
-            pygame.draw.line(surface, (255, 220, 100),
-                             (x2, self.rect.y + 3),
-                             (x2, self.rect.bottom - 3), 1)
         for time in collision_times:
             x = self._x_for_value(time)
             pygame.draw.line(surface, ACCENT_2,

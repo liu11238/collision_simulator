@@ -421,15 +421,11 @@ class BaseModel:
             self.timeline_slider.set_value(self.replay.cursor)
             collision_times = [frame.time for frame in self.replay.frames
                                if frame.event == "collision_before"]
-            collision_windows = [
-                (start, end) for start, end, _ in self.replay.collision_windows
-            ]
             self.timeline_slider.set_rect(
                 timeline_rect.x + 150,
                 timeline_rect.y + (timeline_rect.h - 28) // 2 + 3,
                 timeline_rect.w - 150 - 64)
-            self.timeline_slider.draw(screen, collision_times,
-                                      collision_windows)
+            self.timeline_slider.draw(screen, collision_times)
 
     def draw_summary_cards(self):
         """旧摘要卡兼容入口；实际内容已经迁移到统一分析面板。"""
