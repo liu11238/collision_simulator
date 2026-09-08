@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import theme
+
 import math
 
 import pygame
 
 from config import ACCENT_2, RED
 
-IMPACT_BLUE = (91, 181, 255)
-IMPACT_BLUE_SOFT = (145, 218, 255)
+IMPACT_BLUE = theme.color((91, 181, 255))
+IMPACT_BLUE_SOFT = theme.color((145, 218, 255))
 
 
 def draw_impact_fx(surface, point, intensity, strength=1.0):
@@ -55,15 +57,15 @@ def draw_friction_heat_fx(surface, point, heat, scale=1.0):
     radius = max(7, int((9.0 + 26.0 * intensity) * max(0.5, scale)))
     alpha = int(125 * intensity)
     layer = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
-    pygame.draw.circle(layer, (*RED, max(18, alpha // 3)), (x, y), radius + 4, 2)
-    pygame.draw.circle(layer, (*ACCENT_2, alpha), (x, y), max(3, radius // 3), 1)
+    pygame.draw.circle(layer, (*theme.RED, max(18, alpha // 3)), (x, y), radius + 4, 2)
+    pygame.draw.circle(layer, (*theme.ACCENT_2, alpha), (x, y), max(3, radius // 3), 1)
     for index in range(10):
         angle = index * math.tau / 10.0 + 0.2
         inner = radius * 0.62
         outer = radius * (0.88 + 0.10 * (index % 2))
         pygame.draw.line(
             layer,
-            (*RED, max(12, alpha - 22)),
+            (*theme.RED, max(12, alpha - 22)),
             (int(x + math.cos(angle) * inner), int(y + math.sin(angle) * inner)),
             (int(x + math.cos(angle) * outer), int(y + math.sin(angle) * outer)),
             2,

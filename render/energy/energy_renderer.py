@@ -1,6 +1,8 @@
 """紧凑、响应式的能量账本绘制器。"""
 from __future__ import annotations
 
+import theme
+
 import pygame
 
 from config import ACCENT_2, ACCENT_3, LAYOUT, MUTED, RED, TEXT
@@ -9,11 +11,11 @@ from render.primitives import draw_text
 from render.text import clipped, format_measurement
 from .energy_state import EnergyState
 
-ROD_ENERGY = (203, 178, 129)
-BALL_ENERGY = (159, 217, 210)
-POTENTIAL_ENERGY = (176, 202, 210)
-COLLISION_LOSS = (209, 149, 123)
-FRICTION_HEAT = (219, 147, 152)
+ROD_ENERGY = theme.color((203, 178, 129))
+BALL_ENERGY = theme.color((159, 217, 210))
+POTENTIAL_ENERGY = theme.color((176, 202, 210))
+COLLISION_LOSS = theme.color((209, 149, 123))
+FRICTION_HEAT = theme.color((219, 147, 152))
 
 
 def _segments(state):
@@ -33,16 +35,16 @@ def draw_energy_ledger(surface, rect, account, snapshot=None, title=None, kineti
     strong = font(metrics.small_font_size, True)
     line_h = body.get_height() + 3
     tolerance = max(1e-9, abs(state.initial) * 1e-8)
-    residual_color = (ACCENT_3 if abs(state.residual) <= tolerance else
-                      ACCENT_2 if abs(state.residual) <= tolerance * 10 else RED)
+    residual_color = (theme.ACCENT_3 if abs(state.residual) <= tolerance else
+                      theme.ACCENT_2 if abs(state.residual) <= tolerance * 10 else theme.RED)
 
     with clipped(surface, rect):
         y = rect.y
         draw_text(surface, f"初始能量  {format_measurement(state.initial)} J",
-                  (rect.x, y), strong, TEXT, max_width=rect.w)
+                  (rect.x, y), strong, theme.TEXT, max_width=rect.w)
         y += strong.get_height() + 7
         bar = pygame.Rect(rect.x, y, rect.w, 16)
-        pygame.draw.rect(surface, (33, 45, 43), bar, border_radius=6)
+        pygame.draw.rect(surface, theme.color((33, 45, 43)), bar, border_radius=6)
         scale = max(abs(state.initial), 1e-12)
         cursor = bar.x
         for _, value, color in _segments(state):
@@ -67,7 +69,7 @@ def draw_energy_ledger(surface, rect, account, snapshot=None, title=None, kineti
             draw_text(surface, label, (rect.x, y), body, color,
                       max_width=label_w - 4)
             meter = pygame.Rect(meter_x, y + 4, meter_w, 7)
-            pygame.draw.rect(surface, (33, 45, 43), meter, border_radius=3)
+            pygame.draw.rect(surface, theme.color((33, 45, 43)), meter, border_radius=3)
             fill = int(meter.w * max(0.0, value) / scale)
             if value > 0 and fill == 0:
                 fill = 2
@@ -76,13 +78,13 @@ def draw_energy_ledger(surface, rect, account, snapshot=None, title=None, kineti
                                  (meter.x, meter.y, min(fill, meter.w), meter.h),
                                  border_radius=3)
             draw_text(surface, f"{format_measurement(value)} J", (rect.right, y),
-                      body, TEXT, anchor="topright", max_width=value_w)
+                      body, theme.TEXT, anchor="topright", max_width=value_w)
             y += line_h
         if snapshot is not None and y + line_h <= rect.bottom - line_h:
             draw_text(surface,
                       f"碰前→碰后  {format_measurement(snapshot.ke_before)} → "
                       f"{format_measurement(snapshot.ke_after)} J",
-                      (rect.x, y), body, MUTED, max_width=rect.w)
+                      (rect.x, y), body, theme.MUTED, max_width=rect.w)
         draw_text(surface,
                   f"残差 {format_measurement(state.residual)} J  "
                   f"{'✓ 闭合' if abs(state.residual) <= tolerance else '⚠ 检查'}",

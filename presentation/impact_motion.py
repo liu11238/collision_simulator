@@ -1,3 +1,4 @@
+import theme
 """Deterministic presentation motion; never integrates physical state."""
 from dataclasses import dataclass
 import math
@@ -73,7 +74,7 @@ def flow_dots(surface, start, end, elapsed, color, count=3, radius=3):
         point = (round(start[0] + (end[0] - start[0]) * p),
                  round(start[1] + (end[1] - start[1]) * p))
         pygame.draw.circle(surface, color, point, radius + 2)
-        pygame.draw.circle(surface, (240, 250, 255), point, radius)
+        pygame.draw.circle(surface, theme.color((240, 250, 255)), point, radius)
 
 
 def orbit_focus(surface, center, radius, elapsed, color):
@@ -91,21 +92,21 @@ def draw_scene_explanation(surface, scene, elapsed, duration, centers, radii,
     """Motion tied to the active concept, including elastic / zero-transfer cases."""
     stage = min(2, int(elapsed / duration))
     progress = stage_progress(elapsed, duration, stage)
-    colors = (ACCENT_2, ACCENT_3)
+    colors = (theme.ACCENT_2, theme.ACCENT_3)
     scene = pygame.Rect(scene)
     badge = pygame.Rect(scene.x + 16, scene.y + 10, 298, 61)
-    rounded_rect(surface, badge, (23, 36, 34), 9, 1, (64, 87, 76))
+    rounded_rect(surface, badge, theme.color((23, 36, 34)), 9, 1, theme.color((64, 87, 76)))
     captions = ('速度变化 · 箭头逐步变为碰后速度',
                 '冲量传递 · 两者受到反向接触冲量',
                 '能量分配 · 光点追踪动能去向')
-    draw_text(surface, captions[stage], (badge.x + 10, badge.y + 5), FONT_TINY, TEXT,
+    draw_text(surface, captions[stage], (badge.x + 10, badge.y + 5), FONT_TINY, theme.TEXT,
               max_width=badge.w - 20)
     status = '物理暂停，讲解正在播放' if running else '讲解已暂停'
-    draw_text(surface, status, (badge.x + 10, badge.y + 28), FONT_TINY, MUTED)
+    draw_text(surface, status, (badge.x + 10, badge.y + 28), FONT_TINY, theme.MUTED)
     track = pygame.Rect(badge.x + 10, badge.bottom - 7, badge.w - 20, 3)
-    pygame.draw.rect(surface, (46, 64, 56), track)
+    pygame.draw.rect(surface, theme.color((46, 64, 56)), track)
     p = clamp(elapsed / (duration * 3), 0, 1)
-    pygame.draw.rect(surface, ACCENT_3, (track.x, track.y, round(track.w * p), 3))
+    pygame.draw.rect(surface, theme.ACCENT_3, (track.x, track.y, round(track.w * p), 3))
     for center, radius, color in zip(centers, radii, colors):
         orbit_focus(surface, center, radius + 7, elapsed, color)
 
@@ -134,14 +135,14 @@ def draw_scene_explanation(surface, scene, elapsed, duration, centers, radii,
                 return (round(u*u*start[0] + 2*u*t*(start[0]+end[0])*.5 + t*t*end[0]),
                         round(u*u*start[1] + 2*u*t*crest + t*t*end[1]))
 
-            pygame.draw.lines(surface, (70, 100, 115), False,
+            pygame.draw.lines(surface, theme.color((70, 100, 115)), False,
                               [point(i / 24) for i in range(25)], 2)
             for i in range(4):
                 pos = point((elapsed * .7 + i / 4) % 1)
                 pygame.draw.circle(surface, colors[last], pos, 4)
-                pygame.draw.circle(surface, (245, 250, 255), pos, 2)
+                pygame.draw.circle(surface, theme.color((245, 250, 255)), pos, 2)
         loss = max(0.0, sum(energy_before) - sum(energy_after))
         if loss > max(1e-9, sum(energy_before) * 1e-9):
             contact = ((centers[0][0] + centers[1][0]) // 2,
                        (centers[0][1] + centers[1][1]) // 2)
-            orbit_focus(surface, contact, max(radii) + 18, -elapsed, (209, 149, 123))
+            orbit_focus(surface, contact, max(radii) + 18, -elapsed, theme.color((209, 149, 123)))

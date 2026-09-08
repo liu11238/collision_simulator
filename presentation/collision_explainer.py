@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import theme
+
 import math
 
 import pygame
@@ -54,7 +56,7 @@ def _flow_dot(surface, start, end, progress, color, radius=5):
         int(_lerp(start[1], end[1], p)),
     )
     pygame.draw.circle(surface, color, pos, radius + 4)
-    pygame.draw.circle(surface, (245, 250, 255), pos, radius)
+    pygame.draw.circle(surface, theme.color((245, 250, 255)), pos, radius)
 
 
 class CollisionExplainer:
@@ -226,24 +228,24 @@ class CollisionExplainer:
         right = (rect.right - 105, rect.y + 112)
 
         draw_text(surface, "碰撞不是瞬移：速度沿冲量方向重新分配",
-                  (rect.x + 20, rect.y + 57), FONT_SMALL, MUTED)
-        pygame.draw.line(surface, (39, 55, 88), left, node, 8)
-        pygame.draw.line(surface, (39, 55, 88), node, right, 8)
-        draw_arrow(surface, left, node, ACCENT_2, 3)
-        draw_arrow(surface, node, right, ACCENT_3, 3)
-        _flow_dot(surface, left, node, p, ACCENT_2)
-        _flow_dot(surface, node, right, p, ACCENT_3)
+                  (rect.x + 20, rect.y + 57), FONT_SMALL, theme.MUTED)
+        pygame.draw.line(surface, theme.color((39, 55, 88)), left, node, 8)
+        pygame.draw.line(surface, theme.color((39, 55, 88)), node, right, 8)
+        draw_arrow(surface, left, node, theme.ACCENT_2, 3)
+        draw_arrow(surface, node, right, theme.ACCENT_3, 3)
+        _flow_dot(surface, left, node, p, theme.ACCENT_2)
+        _flow_dot(surface, node, right, p, theme.ACCENT_3)
 
-        draw_text(surface, "杆碰撞点", left, FONT_TINY, TEXT, anchor="midbottom")
-        draw_text(surface, "冲量 J", node, FONT_TINY, ACCENT_2, anchor="midtop")
-        draw_text(surface, "小球", right, FONT_TINY, TEXT, anchor="midbottom")
+        draw_text(surface, "杆碰撞点", left, FONT_TINY, theme.TEXT, anchor="midbottom")
+        draw_text(surface, "冲量 J", node, FONT_TINY, theme.ACCENT_2, anchor="midtop")
+        draw_text(surface, "小球", right, FONT_TINY, theme.TEXT, anchor="midbottom")
         draw_text(surface, f"hω: {format_sig3(self.contact_speed_display())} m/s",
-                  (left[0], left[1] + 17), FONT_TINY, ACCENT_2, anchor="midtop")
+                  (left[0], left[1] + 17), FONT_TINY, theme.ACCENT_2, anchor="midtop")
         draw_text(surface, f"v: {format_sig3(self.ball_v_display())} m/s",
-                  (right[0], right[1] + 17), FONT_TINY, ACCENT_3, anchor="midtop")
+                  (right[0], right[1] + 17), FONT_TINY, theme.ACCENT_3, anchor="midtop")
         draw_text(surface,
                   f"相对速度  {format_sig3(s.relative_before)}  →  {format_sig3(s.relative_after)} m/s",
-                  (rect.centerx, rect.bottom - 24), FONT_SMALL, ACCENT_3,
+                  (rect.centerx, rect.bottom - 24), FONT_SMALL, theme.ACCENT_3,
                   anchor="center")
 
     def _draw_momentum(self, surface, rect):
@@ -255,40 +257,40 @@ class CollisionExplainer:
         x = rect.x + 185
 
         draw_text(surface, "绕转轴角动量在杆与小球之间重新分配；总量不凭空改变",
-                  (rect.x + 20, rect.y + 57), FONT_SMALL, MUTED)
+                  (rect.x + 20, rect.y + 57), FONT_SMALL, theme.MUTED)
         draw_text(surface, "总角动量守恒",
-                  (rect.x + 20, rect.y + 78), FONT_TINY, TEXT)
+                  (rect.x + 20, rect.y + 78), FONT_TINY, theme.TEXT)
         draw_text(surface, f"L_before = {format_sig3(s.total_L_before)} kg*m^2/s",
-                  (rect.x + 20, rect.y + 94), FONT_TINY, MUTED)
+                  (rect.x + 20, rect.y + 94), FONT_TINY, theme.MUTED)
         draw_text(surface, f"L_after  = {format_sig3(s.total_L_after)} kg*m^2/s",
-                  (rect.x + 20, rect.y + 110), FONT_TINY, MUTED)
+                  (rect.x + 20, rect.y + 110), FONT_TINY, theme.MUTED)
         error = abs(s.total_L_after - s.total_L_before)
         error_percent = 100.0 * error / self.L_scale
-        status_color = ACCENT_3 if error_percent < 1e-6 else ACCENT_2
+        status_color = theme.ACCENT_3 if error_percent < 1e-6 else theme.ACCENT_2
         draw_text(surface, f"误差 = {error_percent:.5f}%  {'✓' if error_percent < 1e-6 else '!'}",
                   (rect.x + 20, rect.y + 126), FONT_TINY, status_color)
 
-        rows = (("杆 Iω", rod_l, self.rod_L_scale, ACCENT_2),
-                ("球 m h v", ball_l, self.ball_L_scale, ACCENT_3))
+        rows = (("杆 Iω", rod_l, self.rod_L_scale, theme.ACCENT_2),
+                ("球 m h v", ball_l, self.ball_L_scale, theme.ACCENT_3))
         y = rect.y + 157
         for label, value, scale, color in rows:
-            draw_text(surface, label, (rect.x + 20, y), FONT_TINY, TEXT)
+            draw_text(surface, label, (rect.x + 20, y), FONT_TINY, theme.TEXT)
             self._draw_signed_bar(surface, x, y + 2, bar_w, value, scale, color, 11)
             draw_text(surface, f"{format_sig3(value)} kg*m^2/s",
                       (rect.right - 20, y - 2), FONT_TINY, color, anchor="topright")
             y += 29
 
         draw_text(surface, "← 负方向       零点       正方向 →",
-                  (x + bar_w / 2, rect.y + 217), FONT_TINY, MUTED, anchor="midtop")
+                  (x + bar_w / 2, rect.y + 217), FONT_TINY, theme.MUTED, anchor="midtop")
 
         transfer_start = (x + int(bar_w * 0.30), rect.y + 232)
         transfer_end = (x + int(bar_w * 0.70), rect.y + 232)
-        _draw_dashed_line(surface, transfer_start, transfer_end, ACCENT_2,
+        _draw_dashed_line(surface, transfer_start, transfer_end, theme.ACCENT_2,
                           2, offset=self.elapsed * 42.0)
-        _flow_dot(surface, transfer_start, transfer_end, p, ACCENT_2, radius=4)
-        draw_arrow(surface, transfer_start, transfer_end, ACCENT_2, 2)
+        _flow_dot(surface, transfer_start, transfer_end, p, theme.ACCENT_2, radius=4)
+        draw_arrow(surface, transfer_start, transfer_end, theme.ACCENT_2, 2)
         draw_text(surface, f"冲量 J = {format_sig3(self.impulse_display())} N*s",
-                  (rect.centerx, rect.bottom - 22), FONT_SMALL, ACCENT_2,
+                  (rect.centerx, rect.bottom - 22), FONT_SMALL, theme.ACCENT_2,
                   anchor="center")
 
     @staticmethod
@@ -297,8 +299,8 @@ class CollisionExplainer:
         x, y, width, height = int(x), int(y), int(width), int(height)
         zero_x = x + width // 2
         half_width = max(0, width // 2 - 5)
-        pygame.draw.rect(surface, (30, 43, 72), (x, y, width, height), border_radius=5)
-        pygame.draw.line(surface, (220, 230, 250), (zero_x, y - 2),
+        pygame.draw.rect(surface, theme.color((30, 43, 72)), (x, y, width, height), border_radius=5)
+        pygame.draw.line(surface, theme.color((220, 230, 250)), (zero_x, y - 2),
                          (zero_x, y + height + 2), 1)
         scaled = int(half_width * clamp(abs(value) / max_value, 0.0, 1.0))
         if scaled <= 0:
@@ -326,13 +328,13 @@ class CollisionExplainer:
         parts = self.energy_parts_display()
         total = max(parts["total"], 1e-9)
         values = (
-            ("杆转动", parts["rod"], ACCENT_2),
-            ("球平动", parts["ball"], ACCENT_3),
-            ("碰撞损失/热", parts["loss"], RED),
+            ("杆转动", parts["rod"], theme.ACCENT_2),
+            ("球平动", parts["ball"], theme.ACCENT_3),
+            ("碰撞损失/热", parts["loss"], theme.RED),
         )
 
         draw_text(surface, "碰前动能沿三条路径流出；损失变成不可逆的热",
-                  (rect.x + 20, rect.y + 57), FONT_SMALL, MUTED)
+                  (rect.x + 20, rect.y + 57), FONT_SMALL, theme.MUTED)
         source_x = rect.x + 125
         target_x = rect.right - 225
         source_top = rect.y + 82
@@ -354,13 +356,13 @@ class CollisionExplainer:
             source_cursor += h
             target_cursor += h
 
-        pygame.draw.rect(surface, (230, 238, 255),
+        pygame.draw.rect(surface, theme.color((230, 238, 255)),
                          (source_x - 8, int(source_top), 16, int(total_h)),
                          border_radius=5)
         draw_text(surface, "碰前动能", (source_x - 18, source_top - 17),
-                  FONT_TINY, TEXT, anchor="midbottom")
+                  FONT_TINY, theme.TEXT, anchor="midbottom")
         draw_text(surface, f"{format_sig3(total)} J", (source_x - 18, source_top + total_h + 5),
-                  FONT_TINY, ACCENT, anchor="midtop")
+                  FONT_TINY, theme.ACCENT, anchor="midtop")
 
         for label, value, color, center, h in centers:
             pygame.draw.rect(surface, color,
@@ -368,7 +370,7 @@ class CollisionExplainer:
                               14, int(max(6.0, h))), border_radius=4)
             draw_text(surface, label, (target_x + 18, center - 13), FONT_TINY, color)
             draw_text(surface, f"{format_sig3(value)} J", (target_x + 18, center + 3),
-                      FONT_TINY, TEXT)
+                      FONT_TINY, theme.TEXT)
 
         for _, _, color, center, _ in centers:
             _draw_dashed_line(surface, (source_x + 15, center),
@@ -378,7 +380,7 @@ class CollisionExplainer:
                       self.energy_progress, color, radius=3)
 
         draw_text(surface, "碰撞后阻尼耗散将在后续运动中继续累计",
-                  (rect.centerx, rect.bottom - 22), FONT_SMALL, ACCENT_3,
+                  (rect.centerx, rect.bottom - 22), FONT_SMALL, theme.ACCENT_3,
                   anchor="center")
 
     def draw(self, surface, rect, running=True):

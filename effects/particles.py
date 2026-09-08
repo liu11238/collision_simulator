@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import theme
+
 import math
 import random
 from typing import Callable
@@ -18,7 +20,7 @@ class Particle:
     )
 
     def __init__(self, kind, x, y, vx, vy, life, size=3.0,
-                 color_start=(255, 240, 160), color_end=(255, 80, 20),
+                 color_start=theme.color((255, 240, 160)), color_end=theme.color((255, 80, 20)),
                  trail_len=0, angle=0.0, spin=0.0):
         self.kind = kind
 
@@ -137,8 +139,8 @@ def spawn_impact_particles(particles, shockwaves, x, y, strength, direction=1.0,
         particles.append(Particle(
             "spark", x, y, vx, vy, random.uniform(0.28, 0.72),
             size=random.uniform(2.0, 4.6),
-            color_start=lerp_color((234, 230, 199), (187, 214, 182), random.random()),
-            color_end=lerp_color((127, 161, 134), (45, 70, 59), random.random()),
+            color_start=lerp_color(theme.color((234, 230, 199)), theme.color((187, 214, 182)), random.random()),
+            color_end=lerp_color(theme.color((127, 161, 134)), theme.color((45, 70, 59)), random.random()),
             trail_len=random.randint(4, 9),
         ))
 
@@ -152,8 +154,8 @@ def spawn_impact_particles(particles, shockwaves, x, y, strength, direction=1.0,
             math.sin(ang) * speed + vertical_bias,
             random.uniform(0.5, 1.2),
             size=random.uniform(1.5, 2.8),
-            color_start=(209, 185, 136),
-            color_end=(45, 57, 46),
+            color_start=theme.color((209, 185, 136)),
+            color_end=theme.color((45, 57, 46)),
         ))
 
     for _ in range(6):
@@ -165,13 +167,13 @@ def spawn_impact_particles(particles, shockwaves, x, y, strength, direction=1.0,
             random.uniform(-1.4, 1.4) + vertical_bias,
             random.uniform(0.10, 0.28),
             size=2.5,
-            color_start=(255, 255, 255),
-            color_end=(180, 220, 255),
+            color_start=theme.color((255, 255, 255)),
+            color_end=theme.color((180, 220, 255)),
         ))
 
     for radius, life, color, width in [
-        (0.22, 0.22, (229, 216, 177), 1),
-        (0.40, 0.34, (192, 166, 127), 1),
-        (0.62, 0.48, (151, 207, 184), 1),
+        (0.22, 0.22, theme.color((229, 216, 177)), 1),
+        (0.40, 0.34, theme.color((192, 166, 127)), 1),
+        (0.62, 0.48, theme.color((151, 207, 184)), 1),
     ]:
         shockwaves.append(ShockWave(x, y, radius, life, color, width))
