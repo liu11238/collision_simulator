@@ -113,7 +113,9 @@ class BaseModel:
             row = spec["row"]
             x = content.x + column * (col_w + col_gap)
             cell_y = content.y + row * row_h
-            slider_y = cell_y + min(29, row_h - 13)
+            # Keep the full knob below the input field.  The former 29 px
+            # offset let the knob enter the input by several pixels.
+            slider_y = cell_y + min(31, row_h - 13)
             if key in self.sliders:
                 # 滑块占据单元第二行；第一行专用于名称与精确输入。
                 # 两端为 14px 半径的旋钮留出空间，极值时也不会被裁剪。
@@ -122,7 +124,7 @@ class BaseModel:
             if input_key in self.input_boxes:
                 self.input_boxes[input_key].set_rect(
                     x + col_w - input_w - unit_w, cell_y,
-                    input_w, min(26, row_h - 16)
+                    input_w, min(22, row_h - 18)
                 )
 
         for key, spec in self._toggle_specs.items():

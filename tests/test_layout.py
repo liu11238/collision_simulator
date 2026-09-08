@@ -166,7 +166,26 @@ class LayoutTest(unittest.TestCase):
         self.assertTrue(panel.contains(model.input_boxes["h"].rect))
         height_slider = model.sliders["height_ratio"]
         self.assertEqual(model.input_boxes["h"].rect.y,
-                         height_slider.y - min(29, LAYOUT.metrics.parameter_row_height - 13))
+                         height_slider.y - min(31, LAYOUT.metrics.parameter_row_height - 13))
+
+    def test_input_boxes_clear_slider_knobs_at_supported_sizes(self):
+        from models.ball_ball import BallBallCollision
+        from models.ball_rod import BallHitsRod
+
+        for width, height in MATRIX:
+            with self.subTest(size=(width, height)):
+                LAYOUT.apply(width, height)
+                try:
+                    for model in (BallBallCollision(), BallHitsRod()):
+                        for key, box in model.input_boxes.items():
+                            slider_key = "height_ratio" if key == "h" else key
+                            slider = model.sliders[slider_key]
+                            self.assertLess(
+                                box.rect.bottom, slider.y - 8,
+                                f"{key}: input {box.rect} overlaps knob at y={slider.y}",
+                            )
+                finally:
+                    LAYOUT.apply(DEFAULT_WIDTH, DEFAULT_HEIGHT)
 
     def test_explain_toggle_fits_inside_parameter_panel_content(self):
         from models.ball_rod import BallHitsRod

@@ -381,7 +381,8 @@ class InputBox:
         )
         rounded_rect(surface, self.rect, theme.INPUT_BG, 7, 1, border)
 
-        text_x, text_y = self.rect.x + 7, self.rect.y + 6
+        text_x = self.rect.x + 7
+        text_y = self.rect.centery - FONT_SMALL.get_height() // 2
         if self.active and self.has_selection():
             a, b = self.selection_range()
             sx = text_x + self.text_width(self.text[:a])
@@ -399,7 +400,9 @@ class InputBox:
                              (cx, self.rect.bottom - 5), 1)
         if self.unit:
             draw_text(surface, self.unit,
-                      (self.rect.right + 5, self.rect.y + 6), FONT_TINY, theme.MUTED)
+                      (self.rect.right + 5,
+                       self.rect.centery - FONT_TINY.get_height() // 2),
+                      FONT_TINY, theme.MUTED)
 
 
 @dataclass
