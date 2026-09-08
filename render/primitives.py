@@ -150,23 +150,12 @@ def draw_arrow(surface, start, end, color, width=3):
 
 
 def create_static_background(width: int, height: int):
-<<<<<<< HEAD
-    """iOS-inspired dark canvas with restrained blue ambient light."""
-=======
     """Dark canvas with restrained ambient light."""
->>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
     from config import LAYOUT
     bg = pygame.Surface((max(1, width), max(1, height))).convert()
     draw_gradient_3(bg, (0, 0, width, height), theme.BG_TOP, theme.BG_MID, theme.BG_BOTTOM)
     scene = pygame.Rect(LAYOUT.scene).inflate(-2, -12)
     haze = pygame.Surface((width, height), pygame.SRCALPHA)
-<<<<<<< HEAD
-    for radius, alpha in ((340, 14), (230, 10), (130, 8)):
-        pygame.draw.circle(haze, (10, 132, 255, alpha),
-                           (scene.left + scene.w // 3, scene.centery), radius)
-    for radius, alpha in ((230, 5), (140, 7)):
-        pygame.draw.circle(haze, (94, 92, 230, alpha),
-=======
     for radius in range(340, 0, -4):
         alpha = round(12 * (1 - radius / 340) ** 2)
         pygame.draw.circle(haze, (*theme.ACCENT, alpha),
@@ -174,20 +163,10 @@ def create_static_background(width: int, height: int):
     for radius in range(230, 0, -4):
         alpha = round(8 * (1 - radius / 230) ** 2)
         pygame.draw.circle(haze, (*theme.ACCENT_2, alpha),
->>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
                            (scene.right - scene.w // 5, scene.top + 70), radius)
     bg.blit(haze, (0, 0))
     for x in range(scene.left + 20, scene.right - 16, 32):
         for y in range(scene.top + 20, scene.bottom - 12, 32):
-<<<<<<< HEAD
-            pygame.draw.circle(bg, (44, 44, 46), (x, y), 1)
-    pygame.draw.rect(bg, (58, 58, 60), scene, 1, border_radius=18)
-    # Small drafting corners, deliberately quieter than the velocity vectors.
-    for x, dx in ((scene.left + 12, 1), (scene.right - 12, -1)):
-        for y, dy in ((scene.top + 12, 1), (scene.bottom - 12, -1)):
-            pygame.draw.line(bg, (99, 99, 102), (x, y), (x + 10 * dx, y))
-            pygame.draw.line(bg, (99, 99, 102), (x, y), (x, y + 10 * dy))
-=======
             pygame.draw.circle(bg, theme.color((44, 44, 46)), (x, y), 1)
     pygame.draw.rect(bg, theme.color((58, 58, 60)), scene, 1, border_radius=18)
     # Small drafting corners, deliberately quieter than the velocity vectors.
@@ -195,7 +174,6 @@ def create_static_background(width: int, height: int):
         for y, dy in ((scene.top + 12, 1), (scene.bottom - 12, -1)):
             pygame.draw.line(bg, theme.color((99, 99, 102)), (x, y), (x + 10 * dx, y))
             pygame.draw.line(bg, theme.color((99, 99, 102)), (x, y), (x, y + 10 * dy))
->>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
     return bg
 
 
