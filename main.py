@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import theme
 
 import pygame
 
@@ -33,8 +34,13 @@ class App:
             model.app = self
         self.mode_index = 0
         self._build_buttons()
+        self.set_theme(theme.current)
 
     def _build_buttons(self):
+        self.theme_buttons = [
+            (key, Button(label, pygame.Rect(365 + i * 86, 12, 82, 32)))
+            for i, (key, label) in enumerate(theme.NAMES.items())
+        ]
         action = pygame.Rect(LAYOUT.action)
         tabs = pygame.Rect(LAYOUT.tabs)
 
@@ -89,6 +95,8 @@ class App:
             self.model.running = False
 
     def draw_mode_tabs(self):
+        for key, button in self.theme_buttons:
+            button.draw(display.screen, active=(key == theme.current))
         self.btn_sound.text = ("声音 开  M" if self.sound.enabled else "声音 关  M") if self.sound.available else "声音不可用"
         for i, button in enumerate(self.mode_buttons):
             button.draw(display.screen, active=(i == self.mode_index))
@@ -127,6 +135,10 @@ class App:
 
                 if self.btn_sound.clicked(event):
                     self.sound.toggle()
+                    continue
+
+                if any(button.clicked(event) and self.set_theme(key)
+                       for key, button in self.theme_buttons):
                     continue
 
                 switched = False
@@ -213,6 +225,12 @@ class App:
         pygame.quit()
 
         sys.exit()
+
+    def set_theme(self, key):
+        theme.select(key)
+        display.resize_display(LAYOUT.width, LAYOUT.height)
+        self.relayout()
+        return True
 
 
 def main():

@@ -1,3 +1,4 @@
+import theme
 """Animated collision comparisons with stable endpoints and a visible clock."""
 import pygame
 
@@ -8,8 +9,8 @@ from render.primitives import draw_arrow, draw_text
 from render.text import clipped
 from utils import clamp, format_sig3
 
-LOSS_COLOR = (255, 143, 72)
-COLORS = (ACCENT_2, ACCENT_3, LOSS_COLOR)
+LOSS_COLOR = theme.color((255, 143, 72))
+COLORS = (theme.ACCENT_2, theme.ACCENT_3, LOSS_COLOR)
 
 
 def draw_impact_panel(surface, rect, elapsed, duration, rows, *, impulses,
@@ -22,24 +23,24 @@ def draw_impact_panel(surface, rect, elapsed, duration, rows, *, impulses,
     line_h = tiny.get_height()
     width = (rect.w - 12) // 3
 
-    def text(value, x, y, color=MUTED, anchor='topleft', max_width=None):
+    def text(value, x, y, color=theme.MUTED, anchor='topleft', max_width=None):
         return draw_text(surface, value, (round(x), round(y)), tiny, color,
                          anchor=anchor, max_width=max_width or rect.w - 8)
 
     with clipped(surface, rect):
         for i, label in enumerate(('1  速度变化', '2  冲量与守恒', '3  能量去向')):
             cell = pygame.Rect(rect.x + i * (width + 6), rect.y, width, 25)
-            color = ACCENT_3 if i == stage else MUTED
-            pygame.draw.rect(surface, (32, 43, 41), cell, border_radius=6)
+            color = theme.ACCENT_3 if i == stage else theme.MUTED
+            pygame.draw.rect(surface, theme.color((32, 43, 41)), cell, border_radius=6)
             text(label, *cell.center, color, 'center', width - 8)
         if active:
             status = '讲解播放中' if running else '讲解已暂停'
             remaining = max(0.0, 3 * duration - elapsed)
             text(f'{status} · 剩余 {remaining:.1f}s · Space 跳过', rect.x + 4, rect.y + 33)
             bar = pygame.Rect(rect.x + 4, rect.y + 27, rect.w - 8, 3)
-            pygame.draw.rect(surface, (37, 50, 48), bar)
+            pygame.draw.rect(surface, theme.color((37, 50, 48)), bar)
             filled = round(bar.w * clamp(elapsed / (3 * duration), 0, 1))
-            pygame.draw.rect(surface, ACCENT_3, (bar.x, bar.y, filled, bar.h))
+            pygame.draw.rect(surface, theme.ACCENT_3, (bar.x, bar.y, filled, bar.h))
         else:
             text('碰撞结果 · R 重置后可重新播放讲解', rect.x + 4, rect.y + 33)
 
@@ -60,7 +61,7 @@ def draw_impact_panel(surface, rect, elapsed, duration, rows, *, impulses,
                     ay = y + line_h + (row_h - line_h) * 0.45
                     end = (round(x + value / scale * rect.w * .18), round(ay))
                     start = (round(x), round(ay))
-                    pygame.draw.line(surface, (46, 63, 60),
+                    pygame.draw.line(surface, theme.color((46, 63, 60)),
                                      (round(x), round(ay - 5)), (round(x), round(ay + 5)))
                     if abs(value) < 1e-6:
                         text('静止', x, ay, color, 'center')
@@ -71,7 +72,7 @@ def draw_impact_panel(surface, rect, elapsed, duration, rows, *, impulses,
             text('物理时间暂停；右列箭头逐步变为碰后速度' if active else
                  '左列为碰前，右列为碰后', rect.x + 4, footer_y)
         elif stage == 1:
-            text('等大反向接触冲量，改变两者的运动', rect.x + 4, top, TEXT)
+            text('等大反向接触冲量，改变两者的运动', rect.x + 4, top, theme.TEXT)
             arrow_y = top + line_h + 40
             extent = rect.w * .20 * progress
             for i, impulse in enumerate(impulses):
@@ -93,17 +94,17 @@ def draw_impact_panel(surface, rect, elapsed, duration, rows, *, impulses,
                 text(format_sig3(value), rect.right - 4, y, COLORS[i], 'topright')
                 x0, half_w = rect.x + rect.w * .66, rect.w * .17
                 by = round(y + line_h + 3)
-                pygame.draw.line(surface, (41, 55, 53), (round(x0-half_w), by),
+                pygame.draw.line(surface, theme.color((41, 55, 53)), (round(x0-half_w), by),
                                  (round(x0+half_w), by), 5)
                 pygame.draw.line(surface, COLORS[i], (round(x0), by),
                                  (round(x0 + value / scale * half_w), by), 5)
-                pygame.draw.line(surface, MUTED, (round(x0), by-5), (round(x0), by+5))
+                pygame.draw.line(surface, theme.MUTED, (round(x0), by-5), (round(x0), by+5))
             label, before, after, unit = conserved
             text(f'{label}守恒：{format_sig3(before)} → {format_sig3(after)} {unit}',
-                 rect.x + 4, footer_y, ACCENT_3)
+                 rect.x + 4, footer_y, theme.ACCENT_3)
         else:
             total = sum(part[1] for part in energy_parts)
-            text('动能重新分配；橙色表示碰撞耗散', rect.x + 4, top, TEXT)
+            text('动能重新分配；橙色表示碰撞耗散', rect.x + 4, top, theme.TEXT)
             row_h = (footer_y - top - line_h - 6) // 3
             for i, (label, before, after) in enumerate(energy_parts):
                 value = max(0.0, before + (after - before) * progress)
@@ -113,7 +114,7 @@ def draw_impact_panel(surface, rect, elapsed, duration, rows, *, impulses,
                 text(label, rect.x + 4, y, COLORS[i])
                 text(f'{format_sig3(value)} J', rect.right - 4, y, COLORS[i], 'topright')
                 bar = pygame.Rect(rect.x + 4, y + line_h + 2, rect.w - 8, 7)
-                pygame.draw.rect(surface, (37, 50, 48), bar, border_radius=3)
+                pygame.draw.rect(surface, theme.color((37, 50, 48)), bar, border_radius=3)
                 filled = round(bar.w * clamp(value / max(total, 1e-9), 0, 1))
                 if filled > 0:
                     pygame.draw.rect(surface, COLORS[i], (bar.x, bar.y, filled, bar.h), border_radius=3)
@@ -122,4 +123,4 @@ def draw_impact_panel(surface, rect, elapsed, duration, rows, *, impulses,
             loss = energy_parts[-1][2]
             text('完全弹性：动能总量不变，碰撞耗散为 0' if loss <= max(1e-9, total * 1e-9)
                  else f'动能 + 耗散 = {format_sig3(total)} J（总量保持闭合）',
-                 rect.x + 4, footer_y, ACCENT_3)
+                 rect.x + 4, footer_y, theme.ACCENT_3)

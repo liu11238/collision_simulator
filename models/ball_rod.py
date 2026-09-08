@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import theme
+
 import math
 from dataclasses import dataclass
 
@@ -986,25 +988,25 @@ class BallHitsRod(BaseModel):
         sx1, sy = w2s(min(-1.5 * L, display_ball_x - 0.8 * L), platform_y)
         sx2, _ = w2s(1.25 * L, platform_y)
         sx1, sx2 = max(-80, sx1), min(LAYOUT.width + 80, sx2)
-        pygame.draw.line(display.screen, (23, 31, 29), (sx1, sy + 10), (sx2, sy + 10), 10)
-        pygame.draw.line(display.screen, (33, 45, 43), (sx1, sy + 4), (sx2, sy + 4), 8)
-        pygame.draw.line(display.screen, PLATFORM, (sx1, sy), (sx2, sy), 5)
-        pygame.draw.line(display.screen, PLATFORM_TOP, (sx1, sy - 1), (sx2, sy - 1), 2)
+        pygame.draw.line(display.screen, theme.color((23, 31, 29)), (sx1, sy + 10), (sx2, sy + 10), 10)
+        pygame.draw.line(display.screen, theme.color((33, 45, 43)), (sx1, sy + 4), (sx2, sy + 4), 8)
+        pygame.draw.line(display.screen, theme.PLATFORM, (sx1, sy), (sx2, sy), 5)
+        pygame.draw.line(display.screen, theme.PLATFORM_TOP, (sx1, sy - 1), (sx2, sy - 1), 2)
         for tx in range(max(-40, sx1), min(LAYOUT.width + 40, sx2), 18):
-            pygame.draw.line(display.screen, (74, 100, 96), (tx, sy), (tx + 6, sy + 4), 1)
+            pygame.draw.line(display.screen, theme.color((74, 100, 96)), (tx, sy), (tx + 6, sy + 4), 1)
 
         # 竖直参考线和碰撞高度标记。
         ref_x, ref_y = w2s(0.0, L)
         for y in range(scene_pivot[1] + 4, ref_y, 12):
-            pygame.draw.line(display.screen, (72, 97, 93), (scene_pivot[0], y),
+            pygame.draw.line(display.screen, theme.color((72, 97, 93)), (scene_pivot[0], y),
                              (scene_pivot[0], min(y + 6, ref_y)), 1)
         hx, hy = w2s(-0.36 * L, h)
-        pygame.draw.line(display.screen, (79, 107, 102), (hx, scene_pivot[1]), (hx, hy), 2)
-        pygame.draw.line(display.screen, (79, 107, 102), (hx - 9, scene_pivot[1]), (hx + 9, scene_pivot[1]), 2)
-        pygame.draw.line(display.screen, (79, 107, 102), (hx - 9, hy), (hx + 9, hy), 2)
+        pygame.draw.line(display.screen, theme.color((79, 107, 102)), (hx, scene_pivot[1]), (hx, hy), 2)
+        pygame.draw.line(display.screen, theme.color((79, 107, 102)), (hx - 9, scene_pivot[1]), (hx + 9, scene_pivot[1]), 2)
+        pygame.draw.line(display.screen, theme.color((79, 107, 102)), (hx - 9, hy), (hx + 9, hy), 2)
         draw_text(display.screen, f"h={format_sig3(h)}m", (hx - 10, (scene_pivot[1] + hy) // 2),
-                  FONT_SMALL, MUTED, anchor="midright")
-        draw_text(display.screen, "竖直碰撞位置", (scene_pivot[0] + 12, ref_y - 20), FONT_SMALL, MUTED)
+                  FONT_SMALL, theme.MUTED, anchor="midright")
+        draw_text(display.screen, "竖直碰撞位置", (scene_pivot[0] + 12, ref_y - 20), FONT_SMALL, theme.MUTED)
 
         # 摆角弧线以转轴为圆心，显示竖直向下方向与细杆之间的夹角。
         if not display_collided and 0.0 <= display_theta <= math.pi / 2.0:
@@ -1013,7 +1015,7 @@ class BallHitsRod(BaseModel):
                              scene_pivot[0] - arc_radius, scene_pivot[1] - arc_radius,
                 2 * arc_radius, 2 * arc_radius,
             )
-            pygame.draw.arc(display.screen, ACCENT_2, arc_rect,
+            pygame.draw.arc(display.screen, theme.ACCENT_2, arc_rect,
                             math.pi + display_theta, 1.5 * math.pi, 2)
             bisector = 1.25 * math.pi + 0.5 * display_theta
             label_radius = arc_radius + 18
@@ -1024,7 +1026,7 @@ class BallHitsRod(BaseModel):
             draw_text(
                 display.screen,
                 f"ψ={format_sig3(math.degrees(math.pi / 2 - display_theta))}°",
-                label_pos, FONT_SMALL, ACCENT_2, anchor="center",
+                label_pos, FONT_SMALL, theme.ACCENT_2, anchor="center",
             )
 
         if replay_active:
@@ -1060,7 +1062,7 @@ class BallHitsRod(BaseModel):
                 end = w2s(-L * math.cos(point.theta), L * math.sin(point.theta))
                 alpha = int(35.0 * life)
                 pygame.draw.line(
-                    display.trail_surf_1, (*ROD_GLOW, alpha), scene_pivot, end,
+                    display.trail_surf_1, (*theme.ROD_GLOW, alpha), scene_pivot, end,
                     max(2, int(rod_w * (0.35 + 0.65 * life))),
                 )
             display.screen.blit(display.trail_surf_1, (0, 0))
@@ -1070,42 +1072,42 @@ class BallHitsRod(BaseModel):
         pygame.draw.line(display.glow_surf, (3, 9, 8, 68),
                          (scene_pivot[0] + 5, scene_pivot[1] + 7),
                          (end[0] + 5, end[1] + 7), rod_w + 5)
-        pygame.draw.line(display.glow_surf, (*ROD_GLOW, 10), scene_pivot, end, rod_w + 12)
-        pygame.draw.line(display.glow_surf, (*ROD_GLOW, 16), scene_pivot, end, rod_w + 5)
+        pygame.draw.line(display.glow_surf, (*theme.ROD_GLOW, 10), scene_pivot, end, rod_w + 12)
+        pygame.draw.line(display.glow_surf, (*theme.ROD_GLOW, 16), scene_pivot, end, rod_w + 5)
         display.screen.blit(display.glow_surf, (0, 0))
-        pygame.draw.line(display.screen, ROD_COLOR, scene_pivot, end, rod_w)
-        pygame.draw.line(display.screen, ROD_EDGE, scene_pivot, end, max(2, rod_w // 4))
-        pygame.draw.circle(display.screen, (160, 110, 30), end, rod_w // 2 + 3)
-        pygame.draw.circle(display.screen, ROD_EDGE, end, max(3, rod_w // 4))
+        pygame.draw.line(display.screen, theme.ROD_COLOR, scene_pivot, end, rod_w)
+        pygame.draw.line(display.screen, theme.ROD_EDGE, scene_pivot, end, max(2, rod_w // 4))
+        pygame.draw.circle(display.screen, theme.color((160, 110, 30)), end, rod_w // 2 + 3)
+        pygame.draw.circle(display.screen, theme.ROD_EDGE, end, max(3, rod_w // 4))
 
         px, py = scene_pivot
-        pygame.draw.rect(display.screen, (36, 49, 47), (px - 24, py - 38, 14, 76), border_radius=5)
+        pygame.draw.rect(display.screen, theme.color((36, 49, 47)), (px - 24, py - 38, 14, 76), border_radius=5)
         pygame.draw.circle(display.screen, (8, 11, 11), (px + 3, py + 4), 26)
-        pygame.draw.circle(display.screen, (45, 61, 58), scene_pivot, 24)
-        pygame.draw.circle(display.screen, (30, 41, 39), scene_pivot, 20)
-        pygame.draw.circle(display.screen, (61, 83, 79), scene_pivot, 16)
-        pygame.draw.circle(display.screen, ACCENT, scene_pivot, 6)
-        pygame.draw.circle(display.screen, (210, 240, 255), scene_pivot, 3)
+        pygame.draw.circle(display.screen, theme.color((45, 61, 58)), scene_pivot, 24)
+        pygame.draw.circle(display.screen, theme.color((30, 41, 39)), scene_pivot, 20)
+        pygame.draw.circle(display.screen, theme.color((61, 83, 79)), scene_pivot, 16)
+        pygame.draw.circle(display.screen, theme.ACCENT, scene_pivot, 6)
+        pygame.draw.circle(display.screen, theme.color((210, 240, 255)), scene_pivot, 3)
 
         w_rect = pygame.Rect(px + 32, py - 30, 210, 34)
-        rounded_rect(display.screen, w_rect, (18, 24, 23), 9, 1, (69, 94, 89))
+        rounded_rect(display.screen, w_rect, theme.PANEL_2, 9, 1, theme.INPUT_BORDER)
         draw_text(display.screen, f"w = {format_sig3(display_omega)} rad/s", w_rect.center,
-                  FONT_SMALL, ACCENT_3, anchor="center")
+                  FONT_SMALL, theme.ACCENT_3, anchor="center")
 
         cpx, cpy = w2s(-h * math.cos(display_theta), h * math.sin(display_theta))
-        pygame.draw.circle(display.screen, ACCENT_2, (cpx, cpy), 9, 2)
-        pygame.draw.circle(display.screen, (255, 255, 255), (cpx, cpy), 4)
+        pygame.draw.circle(display.screen, theme.ACCENT_2, (cpx, cpy), 9, 2)
+        pygame.draw.circle(display.screen, theme.color((255, 255, 255)), (cpx, cpy), 4)
 
         if explainer and explainer.phase == "velocity":
             tangent_len = clamp(abs(display_contact_speed) * scale * 0.07, 18, 105)
             tangent_direction = 1 if display_contact_speed >= 0 else -1
             tangent_end = (cpx + int(tangent_direction * tangent_len), cpy)
-            draw_arrow(display.screen, (cpx, cpy), tangent_end, ACCENT_2, 3)
+            draw_arrow(display.screen, (cpx, cpy), tangent_end, theme.ACCENT_2, 3)
             flow_dots(display.screen, (cpx, cpy), tangent_end, explainer.elapsed,
-                      ACCENT_2, count=2, radius=2)
+                      theme.ACCENT_2, count=2, radius=2)
             draw_text(display.screen, f"hω={format_sig3(display_contact_speed)} m/s",
                       (tangent_end[0] + (7 if tangent_direction > 0 else -7), cpy + 8),
-                      FONT_SMALL, ACCENT_2,
+                      FONT_SMALL, theme.ACCENT_2,
                       anchor="topleft" if tangent_direction > 0 else "topright")
 
         if explainer and explainer.phase == "energy":
@@ -1126,7 +1128,7 @@ class BallHitsRod(BaseModel):
         # 重力方向示意箭头。
         gx, gy = w2s(-0.5 * L * math.cos(display_theta),
                      0.5 * L * math.sin(display_theta))
-        draw_arrow(display.screen, (gx, gy), (gx, gy + int(0.20 * scale)), ACCENT_3, 2)
+        draw_arrow(display.screen, (gx, gy), (gx, gy + int(0.20 * scale)), theme.ACCENT_3, 2)
 
         if display_ball_trail:
             display.trail_surf_2.fill((0, 0, 0, 0))
@@ -1136,7 +1138,7 @@ class BallHitsRod(BaseModel):
                 pos = (raw_pos[0] + max(12, int(rb * scale)) + (rod_w + 1) // 2, raw_pos[1])
                 if -100 <= pos[0] <= LAYOUT.width + 100:
                     r = max(2, int(rb * scale * (0.22 + 0.40 * p)))
-                    pygame.draw.circle(display.trail_surf_2, (*BALL1_GLOW, int(12 + 75 * p)), pos, r + 3)
+                    pygame.draw.circle(display.trail_surf_2, (*theme.BALL1_GLOW, int(12 + 75 * p)), pos, r + 3)
             display.screen.blit(display.trail_surf_2, (0, 0))
 
         if not replay_active and not explainer and (self.particles or self.shockwaves):
@@ -1157,7 +1159,7 @@ class BallHitsRod(BaseModel):
             (ball_pos[0] - br - 4, sy - max(3, br // 4),
              2 * br + 8, max(6, br // 2)),
         )
-        draw_matte_ball(display.screen, ball_pos, br, BALL1_COLOR)
+        draw_matte_ball(display.screen, ball_pos, br, theme.BALL1_COLOR)
 
         if not replay_active and not explainer and self.flash > 0:
             contact = w2s(0.0, h)
@@ -1193,17 +1195,17 @@ class BallHitsRod(BaseModel):
             direction = 1 if display_ball_v > 0 else -1
             ay = ball_pos[1] - br - 12
             finish = (int(ball_pos[0] + direction * arrow_len), ay)
-            draw_arrow(display.screen, (ball_pos[0], ay), finish, GREEN, 3)
+            draw_arrow(display.screen, (ball_pos[0], ay), finish, theme.GREEN, 3)
             if explainer:
                 flow_dots(display.screen, (ball_pos[0], ay), finish, explainer.elapsed,
-                          GREEN, count=2, radius=2)
+                          theme.GREEN, count=2, radius=2)
             draw_text(display.screen, f"v={format_sig3(display_ball_v)} m/s",
                       (finish[0] + (10 if direction > 0 else -10), ay - 12), FONT_SMALL,
-                      GREEN, anchor="topleft" if direction > 0 else "topright")
+                      theme.GREEN, anchor="topleft" if direction > 0 else "topright")
         elif not display_collided:
             draw_text(display.screen, "小球静止等待碰撞",
                       (LAYOUT.scene_x + 20, LAYOUT.scene_y + LAYOUT.scene_h - 28),
-                      FONT_SMALL, ACCENT_3)
+                      FONT_SMALL, theme.ACCENT_3)
 
         if explainer:
             s = explainer.snapshot
@@ -1296,20 +1298,20 @@ class BallHitsRod(BaseModel):
                 return
 
         draw_text(display.screen, "角动量分量（数值为有符号量）",
-                  (rect.x + 2, rect.y + 2), FONT_TINY, MUTED)
+                  (rect.x + 2, rect.y + 2), FONT_TINY, theme.MUTED)
         rod_l, ball_l, total_l = getattr(
             self, "_analysis_angular_momentum", (0.0, 0.0, 0.0)
         )
-        values = (("杆 Iω", rod_l, ACCENT_2), ("球 m h v", ball_l, ACCENT_3))
+        values = (("杆 Iω", rod_l, theme.ACCENT_2), ("球 m h v", ball_l, theme.ACCENT_3))
         max_value = getattr(self, "_analysis_L_scale", 1e-6)
         x = rect.x + 112
         width = rect.w - 230
         zero_x = x + width // 2
         for index, (label, value, color) in enumerate(values):
             y = rect.y + 76 + index * 38
-            draw_text(display.screen, label, (rect.x + 14, y), FONT_TINY, TEXT)
-            pygame.draw.rect(display.screen, (34, 46, 44), (x, y + 2, width, 12), border_radius=5)
-            pygame.draw.line(display.screen, (220, 230, 250), (zero_x, y),
+            draw_text(display.screen, label, (rect.x + 14, y), FONT_TINY, theme.TEXT)
+            pygame.draw.rect(display.screen, theme.color((34, 46, 44)), (x, y + 2, width, 12), border_radius=5)
+            pygame.draw.line(display.screen, theme.color((220, 230, 250)), (zero_x, y),
                              (zero_x, y + 16), 1)
             bar = int((width // 2 - 5) * clamp(abs(value) / max_value, 0.0, 1.0))
             if bar:
@@ -1320,7 +1322,7 @@ class BallHitsRod(BaseModel):
             draw_text(display.screen, format_sig3(value), (rect.right - 14, y - 1),
                       FONT_TINY, color, anchor="topright")
         draw_text(display.screen, f"总角动量 = {format_sig3(total_l)} kg*m^2/s",
-                  (rect.x + 14, rect.bottom - 28), FONT_SMALL, ACCENT_3)
+                  (rect.x + 14, rect.bottom - 28), FONT_SMALL, theme.ACCENT_3)
 
     def _draw_collision_replay_summary(self, rect, snapshot):
         """碰撞结束后保留清晰的三阶段概览，而不是占用能量面板。"""
@@ -1332,12 +1334,12 @@ class BallHitsRod(BaseModel):
         centers = [rect.x + int(rect.w * p) for p in (0.16, 0.50, 0.84)]
         y = rect.y + 8
         for i in range(2):
-            pygame.draw.line(display.screen, (60, 81, 77),
+            pygame.draw.line(display.screen, theme.color((60, 81, 77)),
                              (centers[i] + 34, y + 9),
                              (centers[i + 1] - 34, y + 9), 2)
         for center, label in zip(centers, labels):
-            pygame.draw.circle(display.screen, ACCENT_2, (center, y + 9), 5)
-            draw_text(display.screen, label, (center, y + 22), tiny, TEXT,
+            pygame.draw.circle(display.screen, theme.ACCENT_2, (center, y + 9), 5)
+            draw_text(display.screen, label, (center, y + 22), tiny, theme.TEXT,
                       anchor="midtop", max_width=max(70, rect.w // 3 - 8))
         rows = (
             ("小球速度", snapshot.u_before, snapshot.v_after, "m/s"),
@@ -1349,11 +1351,11 @@ class BallHitsRod(BaseModel):
         for label, before, after, unit in rows:
             draw_text(display.screen,
                       f"{label}  {format_sig3(before)} → {format_sig3(after)} {unit}",
-                      (rect.x + 4, y), tiny, MUTED, max_width=rect.w - 8)
+                      (rect.x + 4, y), tiny, theme.MUTED, max_width=rect.w - 8)
             y += tiny.get_height() + 5
         draw_text(display.screen, f"冲量 J = {format_sig3(snapshot.impulse)} N·s",
                   (rect.x + 4, min(y + 3, rect.bottom - small.get_height())),
-                  small, ACCENT_2, max_width=rect.w - 8)
+                  small, theme.ACCENT_2, max_width=rect.w - 8)
 
     def draw_energy_panel(self, rect):
         """能量账本始终固定在右侧底部面板。"""

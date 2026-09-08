@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import theme
+
 import contextlib
 
 import pygame
@@ -151,7 +153,7 @@ def format_measurement(value, sig: int = 4) -> str:
 
 
 def draw_value_unit(surface, right_x, y, value, unit="", font=None,
-                    value_color=(230, 238, 255), unit_color=(140, 155, 190),
+                    value_color=theme.color((230, 238, 255)), unit_color=theme.color((140, 155, 190)),
                     max_width=None):
     """右对齐的“数值 + 单位”两列绘制；返回整体矩形。"""
     unit = str(unit).strip()

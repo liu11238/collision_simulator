@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import math
+import theme
 
 import pygame
 
@@ -47,7 +48,11 @@ def advance_ambience(dt):
 
 def begin_frame():
     """清空整帧并铺满顶栏/场景背景，避免动态文字残影和黑边。"""
+<<<<<<< HEAD
     screen.fill((0, 0, 0))
+=======
+    screen.fill(theme.BG_TOP)
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
     screen.blit(STATIC_BG, (0, 0))
     # A handful of slow drifting motes, confined to the experiment surface.
     scene = pygame.Rect(LAYOUT.scene).inflate(-40, -40)

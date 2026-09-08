@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import theme
+
 import math
 
 import pygame
@@ -285,13 +287,20 @@ class BaseModel:
         screen = display.screen
 
         timeline_rect = pygame.Rect(LAYOUT.timeline)
-        pygame.draw.rect(screen, PANEL,
+        pygame.draw.rect(screen, theme.PANEL,
                          (0, timeline_rect.y, LAYOUT.width,
                           LAYOUT.height - timeline_rect.y))
+<<<<<<< HEAD
         pygame.draw.line(screen, (56, 56, 58), (0, timeline_rect.y),
                          (LAYOUT.width, timeline_rect.y), 2)
         footer_rect = pygame.Rect(LAYOUT.footer)
         pygame.draw.line(screen, (56, 56, 58), (0, footer_rect.y),
+=======
+        pygame.draw.line(screen, theme.color((56, 56, 58)), (0, timeline_rect.y),
+                         (LAYOUT.width, timeline_rect.y), 2)
+        footer_rect = pygame.Rect(LAYOUT.footer)
+        pygame.draw.line(screen, theme.color((56, 56, 58)), (0, footer_rect.y),
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
                          (LAYOUT.width, footer_rect.y), 1)
 
         state_text, display_time = self.interface_state()
@@ -309,22 +318,35 @@ class BaseModel:
         screen = display.screen
         metrics = LAYOUT.metrics
         rect = pygame.Rect(rect)
+<<<<<<< HEAD
         rounded_rect(screen, rect, PANEL_2, 16, 1, (56, 56, 58))
+=======
+        rounded_rect(screen, rect, theme.PANEL_2, 16, 1, theme.color((56, 56, 58)))
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
         pad = metrics.panel_padding
         title_font = font(metrics.small_font_size, True)
         number, _, label = title.partition("   ")
         badge = pygame.Rect(rect.x + pad, rect.y + 7, 25, 18)
+<<<<<<< HEAD
         rounded_rect(screen, badge, (0, 64, 140), 6)
+=======
+        rounded_rect(screen, badge, theme.color((0, 64, 140)), 6)
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
         draw_text(screen, number, badge.center,
-                  font(metrics.tiny_font_size, True), ACCENT, anchor="center")
+                  font(metrics.tiny_font_size, True), theme.ACCENT, anchor="center")
         draw_text(screen, label or number, (badge.right + 8, rect.y + 7),
+<<<<<<< HEAD
                   title_font, TEXT, max_width=rect.w - 2 * pad - 35)
         pygame.draw.line(screen, (56, 56, 58),
+=======
+                  title_font, theme.TEXT, max_width=rect.w - 2 * pad - 35)
+        pygame.draw.line(screen, theme.color((56, 56, 58)),
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
                          (rect.x + pad, rect.y + PANEL_TITLE_H),
                          (rect.right - pad, rect.y + PANEL_TITLE_H), 1)
         reveal = 1.0 - (1.0 - self.ui_reveal) ** 3
         if reveal > 0.001:
-            pygame.draw.line(screen, ACCENT,
+            pygame.draw.line(screen, theme.ACCENT,
                              (rect.x + pad, rect.y + PANEL_TITLE_H),
                              (rect.x + pad + int((rect.w - 2 * pad) * reveal),
                               rect.y + PANEL_TITLE_H), 1)
@@ -343,33 +365,45 @@ class BaseModel:
         screen = display.screen
         metrics = LAYOUT.metrics
         info_rect = pygame.Rect(LAYOUT.info_rect)
+<<<<<<< HEAD
         rounded_rect(screen, info_rect, (28, 28, 30), 18)
+=======
+        rounded_rect(screen, info_rect, theme.PANEL_2, 18)
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
         if self._info_glass.get_size() != (info_rect.w, info_rect.h):
             self._info_glass = self._build_info_glass()
         screen.blit(self._info_glass, info_rect.topleft)
 
+<<<<<<< HEAD
         pygame.draw.rect(screen, (56, 56, 58), info_rect, width=1,
+=======
+        pygame.draw.rect(screen, theme.color((56, 56, 58)), info_rect, width=1,
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
                          border_radius=18)
 
         title_font = font(metrics.body_font_size, True)
         small = font(metrics.small_font_size)
         tiny = font(metrics.tiny_font_size)
         draw_text(screen, "观测记录", (info_rect.x + 18, info_rect.y + 10),
-                  title_font, TEXT, max_width=info_rect.w - 36)
+                  title_font, theme.TEXT, max_width=info_rect.w - 36)
         draw_text(screen, "LIVE DATA", (info_rect.right - 18, info_rect.y + 13),
-                  tiny, ACCENT, anchor="topright")
+                  tiny, theme.ACCENT, anchor="topright")
         draw_horizontal_gradient_line(
             screen, info_rect.x + 16,
             info_rect.y + 10 + title_font.get_height() + 6,
+<<<<<<< HEAD
             info_rect.w - 32, ACCENT, (56, 56, 58), 1)
+=======
+            info_rect.w - 32, theme.ACCENT, theme.color((56, 56, 58)), 1)
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
         collision_lines = collision_lines or []
 
         # 保留完整碰撞快照，不再按关键词截成两行。面板高度不足时由
         # inspector_scroll 浏览，避免关键的碰前/碰后参数被静默丢弃。
         groups = (
-            ("实时状态", list(current_lines), ACCENT),
-            ("碰撞瞬间（碰前 → 碰后）", list(collision_lines), ACCENT_3),
-            ("说明", list(tips or [])[:2], ACCENT_2),
+            ("实时状态", list(current_lines), theme.ACCENT),
+            ("碰撞瞬间（碰前 → 碰后）", list(collision_lines), theme.ACCENT_3),
+            ("说明", list(tips or [])[:2], theme.ACCENT_2),
         )
 
         rows = []
@@ -378,10 +412,10 @@ class BaseModel:
             if lines:
                 for line in lines:
                     rows.append(
-                        (line, TEXT if title == "实时状态" else MUTED, False))
+                        (line, theme.TEXT if title == "实时状态" else theme.MUTED, False))
             else:
                 fallback = (tips or ["尚未发生碰撞"])[0]
-                rows.append((fallback, MUTED, False))
+                rows.append((fallback, theme.MUTED, False))
 
         content_top = info_rect.y + 10 + title_font.get_height() + 14
         content = pygame.Rect(info_rect.x + 18, content_top,
@@ -399,22 +433,22 @@ class BaseModel:
                 y += line_h
         if max_scroll > 0:
             rail = pygame.Rect(info_rect.right - 8, content.top, 3, content.h)
-            pygame.draw.rect(screen, (48, 66, 59), rail, border_radius=2)
+            pygame.draw.rect(screen, theme.color((48, 66, 59)), rail, border_radius=2)
             thumb_h = max(22, int(content.h * content.h / (len(rows) * line_h)))
             thumb_y = rail.y + int((rail.h - thumb_h) * self.inspector_scroll / max_scroll)
-            pygame.draw.rect(screen, MUTED, (rail.x, thumb_y, 3, thumb_h), border_radius=2)
+            pygame.draw.rect(screen, theme.MUTED, (rail.x, thumb_y, 3, thumb_h), border_radius=2)
 
     def draw_timeline(self):
         screen = display.screen
         timeline_rect = pygame.Rect(LAYOUT.timeline)
         draw_text(screen, "时间轴 / REPLAY" if hasattr(self, "replay") else "实验操作",
-                  (timeline_rect.x, timeline_rect.y + 5), FONT_SMALL, MUTED)
+                  (timeline_rect.x, timeline_rect.y + 5), FONT_SMALL, theme.MUTED)
         state = "回放中" if getattr(self, "replay_mode", False) else "实时"
         draw_text(screen, state, (timeline_rect.right, timeline_rect.y + 5),
-                  FONT_SMALL, ACCENT_3, anchor="topright")
+                  FONT_SMALL, theme.ACCENT_3, anchor="topright")
         if not hasattr(self, "replay"):
             draw_text(screen, "Space 开始 / 暂停    ·    C 直达碰撞    ·    R 重置    ·    E 慢放讲解",
-                      (timeline_rect.x + 150, timeline_rect.y + 5), FONT_SMALL, MUTED,
+                      (timeline_rect.x + 150, timeline_rect.y + 5), FONT_SMALL, theme.MUTED,
                       max_width=timeline_rect.w - 230)
         if hasattr(self, "replay"):
             self.timeline_slider.set_duration(self.replay.duration)
@@ -457,7 +491,7 @@ class BaseModel:
                 label_right = (input_box.rect.x - 6
                                if input_box is not None else cell_x + col_w)
                 draw_text(screen, spec["label"], (cell_x, cell_y + 3), tiny,
-                          MUTED, max_width=max(20, label_right - cell_x))
+                          theme.MUTED, max_width=max(20, label_right - cell_x))
             for key, slider in self.sliders.items():
                 self.draw_slider_value(key, slider)
             for box in self.input_boxes.values():
@@ -468,7 +502,7 @@ class BaseModel:
                 cell_y = rows_rect.y + row * metrics.parameter_row_height
                 toggle = self.toggles[key]
                 draw_text(screen, spec["label"], (cell_x, cell_y + 3), tiny,
-                          MUTED,
+                          theme.MUTED,
                           max_width=max(20, toggle.rect.x - 34 - cell_x))
             for toggle in self.toggles.values():
                 toggle.draw(screen)
@@ -483,7 +517,7 @@ class BaseModel:
         tiny = font(LAYOUT.metrics.tiny_font_size)
         summary = self.summary_line()
         if summary:
-            draw_text(screen, summary, rect.topleft, tiny, MUTED,
+            draw_text(screen, summary, rect.topleft, tiny, theme.MUTED,
                       max_width=rect.w)
         lines = wrap_chinese_text(self.notice or "", tiny, rect.w)
         line_h = tiny.get_height() + 4
@@ -494,7 +528,7 @@ class BaseModel:
             for index, line in enumerate(lines[:rows]):
                 draw_text(screen, line,
                           (rect.x, rect.y + offset + index * line_h),
-                          tiny, MUTED)
+                          tiny, theme.MUTED)
 
     def draw_energy_panel(self, rect):
         """能量面板默认内容。模型可覆写以绘制结构化账本。"""
@@ -502,7 +536,7 @@ class BaseModel:
         if not lines and self.summary_line():
             lines = [self.summary_line()]
         draw_text_box(display.screen, rect, lines,
-                      font(LAYOUT.metrics.tiny_font_size), MUTED)
+                      font(LAYOUT.metrics.tiny_font_size), theme.MUTED)
 
     def draw_footer(self):
         """footer：左侧公式，右侧操作按钮。"""
@@ -516,11 +550,11 @@ class BaseModel:
             body_font = font(size)
         line_h = formula_rect.h // 2
         line_1, line_2 = self.formula_lines()
-        draw_text(screen, line_1, formula_rect.topleft, body_font, ACCENT_2,
+        draw_text(screen, line_1, formula_rect.topleft, body_font, theme.ACCENT_2,
                   max_width=formula_rect.w)
         draw_text(screen, line_2,
                   (formula_rect.x, formula_rect.y + line_h),
-                  body_font, MUTED, max_width=formula_rect.w)
+                  body_font, theme.MUTED, max_width=formula_rect.w)
         if self.app is not None:
             self.app.btn_start.draw(screen, self.running)
             self.app.btn_reset.draw(screen)
@@ -529,21 +563,21 @@ class BaseModel:
     def draw_header(self, state_text, display_time=None):
         screen = display.screen
         metrics = LAYOUT.metrics
-        pygame.draw.rect(screen, PANEL, LAYOUT.header)
+        pygame.draw.rect(screen, theme.PANEL, LAYOUT.header)
         # An orbital mark gives the utility a modest visual identity.
         cx, cy = 34, LAYOUT.header_h // 2
-        pygame.draw.circle(screen, ACCENT, (cx - 5, cy), 10, 1)
-        pygame.draw.circle(screen, ACCENT_2, (cx + 7, cy), 6)
-        draw_text(screen, "碰撞之间", (58, 6), font(22, True), TEXT)
+        pygame.draw.circle(screen, theme.ACCENT, (cx - 5, cy), 10, 1)
+        pygame.draw.circle(screen, theme.ACCENT_2, (cx + 7, cy), 6)
+        draw_text(screen, "碰撞之间", (58, 6), font(22, True), theme.TEXT)
         if display_time is None:
             display_time = self.t
-        status_color = ACCENT_3 if self.running else ACCENT_2
+        status_color = theme.ACCENT_3 if self.running else theme.ACCENT_2
         pulse = (1.0 + math.sin(self.ui_time * 3.2)) * .5
-        pygame.draw.circle(screen, lerp_color(status_color, TEXT, pulse * .2),
+        pygame.draw.circle(screen, lerp_color(status_color, theme.TEXT, pulse * .2),
                            (60, LAYOUT.header_h - 15), 3 + int(pulse > .86))
         draw_text(screen, f"COLLISION STUDIO   {state_text}   {format_sig3(display_time)} s",
-                  (69, LAYOUT.header_h - 23), font(metrics.tiny_font_size), MUTED,
-                  max_width=LAYOUT.tabs[0] - 190)
+                  (69, LAYOUT.header_h - 23), font(metrics.tiny_font_size), theme.MUTED,
+                  max_width=280)
         if self.app is not None:
             self.app.btn_sound.draw(screen, self.app.sound.enabled)
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import theme
+
 import math
 
 import pygame
@@ -424,7 +426,7 @@ class BallBallCollision(BaseModel):
                 running=self.running)
             return
         draw_text(display.screen, self.summary_line(), (rect.x + 2, rect.y + 2),
-                  FONT_TINY, MUTED, max_width=rect.w - 4)
+                  FONT_TINY, theme.MUTED, max_width=rect.w - 4)
 
         # v1-v2 判定集中在分析区；一旦开始运行仍保留参数摘要。
         panel_phase = replay_frame.phase if replay_frame is not None else self.phase
@@ -432,12 +434,12 @@ class BallBallCollision(BaseModel):
             relation = "会相撞" if self.v1 > self.v2 else "不会相撞"
             delta_v = self.v1 - self.v2
             draw_text(display.screen, "碰撞判定",
-                      (rect.x + 2, rect.y + 34), FONT_SMALL, MUTED)
+                      (rect.x + 2, rect.y + 34), FONT_SMALL, theme.MUTED)
 
             draw_text(display.screen,
                       f"v1-v2 = {format_sig3(delta_v)} m/s  →  {relation}",
                       (rect.x + 2, rect.y + 58), FONT_SMALL,
-                      ACCENT_3 if delta_v > 0 else RED, max_width=rect.w - 4)
+                      theme.ACCENT_3 if delta_v > 0 else theme.RED, max_width=rect.w - 4)
 
     def draw_scene(self):
         with clipped(display.screen, pygame.Rect(LAYOUT.scene)):
@@ -488,19 +490,19 @@ class BallBallCollision(BaseModel):
 
         display.screen.blit(display.STATIC_BG, (0, 0))
         scene_left, scene_right = LAYOUT.scene_x, LAYOUT.scene_x + LAYOUT.scene_w
-        pygame.draw.line(display.screen, (23, 31, 29), (scene_left, platform_y + 10), (scene_right, platform_y + 10), 10)
-        pygame.draw.line(display.screen, (33, 45, 43), (scene_left, platform_y + 4), (scene_right, platform_y + 4), 8)
-        pygame.draw.line(display.screen, PLATFORM, (scene_left, platform_y), (scene_right, platform_y), 5)
-        pygame.draw.line(display.screen, PLATFORM_TOP, (scene_left, platform_y - 1), (scene_right, platform_y - 1), 2)
+        pygame.draw.line(display.screen, theme.color((23, 31, 29)), (scene_left, platform_y + 10), (scene_right, platform_y + 10), 10)
+        pygame.draw.line(display.screen, theme.color((33, 45, 43)), (scene_left, platform_y + 4), (scene_right, platform_y + 4), 8)
+        pygame.draw.line(display.screen, theme.PLATFORM, (scene_left, platform_y), (scene_right, platform_y), 5)
+        pygame.draw.line(display.screen, theme.PLATFORM_TOP, (scene_left, platform_y - 1), (scene_right, platform_y - 1), 2)
 
         for tx in range(scene_left, scene_right, 18):
-            pygame.draw.line(display.screen, (74, 100, 96), (tx, platform_y), (tx + 6, platform_y + 4), 1)
+            pygame.draw.line(display.screen, theme.color((74, 100, 96)), (tx, platform_y), (tx + 6, platform_y + 4), 1)
 
-        pygame.draw.line(display.screen, (72, 97, 93), (scene_left, center_y), (scene_right, center_y), 1)
+        pygame.draw.line(display.screen, theme.color((72, 97, 93)), (scene_left, center_y), (scene_right, center_y), 1)
         for world_x in range(-4, 5):
             sx, _ = w2s(world_x)
-            pygame.draw.line(display.screen, (72, 97, 93), (sx, center_y - 7), (sx, center_y + 7), 1)
-            draw_text(display.screen, f"{world_x}", (sx, center_y + 12), FONT_TINY, MUTED, anchor="midtop")
+            pygame.draw.line(display.screen, theme.color((72, 97, 93)), (sx, center_y - 7), (sx, center_y + 7), 1)
+            draw_text(display.screen, f"{world_x}", (sx, center_y + 12), FONT_TINY, theme.MUTED, anchor="midtop")
 
 
         if display_phase in {'ready', 'moving'}:
@@ -509,12 +511,12 @@ class BallBallCollision(BaseModel):
             if right_surface > left_surface:
                 p1 = w2s(left_surface, -0.72)
                 p2 = w2s(right_surface, -0.72)
-                pygame.draw.line(display.screen, (84, 113, 108), p1, p2, 2)
+                pygame.draw.line(display.screen, theme.color((84, 113, 108)), p1, p2, 2)
 
-                pygame.draw.line(display.screen, (84, 113, 108), (p1[0], p1[1] - 7), (p1[0], p1[1] + 7), 2)
-                pygame.draw.line(display.screen, (84, 113, 108), (p2[0], p2[1] - 7), (p2[0], p2[1] + 7), 2)
+                pygame.draw.line(display.screen, theme.color((84, 113, 108)), (p1[0], p1[1] - 7), (p1[0], p1[1] + 7), 2)
+                pygame.draw.line(display.screen, theme.color((84, 113, 108)), (p2[0], p2[1] - 7), (p2[0], p2[1] + 7), 2)
                 draw_text(display.screen, f"当前间距={format_sig3(right_surface - left_surface)} m",
-                          ((p1[0] + p2[0]) // 2, p1[1] + 10), FONT_SMALL, MUTED, anchor="midtop")
+                          ((p1[0] + p2[0]) // 2, p1[1] + 10), FONT_SMALL, theme.MUTED, anchor="midtop")
 
         if replay_active:
             trail_start = replay_frame.time - 0.8
@@ -537,8 +539,8 @@ class BallBallCollision(BaseModel):
                 pos = w2s(x)
                 if -100 <= pos[0] <= LAYOUT.width + 100:
                     r = max(2, int(radius_px * (0.12 + 0.26 * p)))
-                    pygame.draw.circle(display.trail_surf_1, (*BALL1_GLOW, int(10 + 70 * p)), pos, r + 3)
-                    pygame.draw.circle(display.trail_surf_1, (*BALL1_COLOR, int(10 + 70 * p)), pos, r)
+                    pygame.draw.circle(display.trail_surf_1, (*theme.BALL1_GLOW, int(10 + 70 * p)), pos, r + 3)
+                    pygame.draw.circle(display.trail_surf_1, (*theme.BALL1_COLOR, int(10 + 70 * p)), pos, r)
             display.screen.blit(display.trail_surf_1, (0, 0))
 
         if trail2:
@@ -549,8 +551,8 @@ class BallBallCollision(BaseModel):
                 pos = w2s(x)
                 if -100 <= pos[0] <= LAYOUT.width + 100:
                     r = max(2, int(radius_px * (0.12 + 0.26 * p)))
-                    pygame.draw.circle(display.trail_surf_2, (*BALL2_GLOW, int(10 + 70 * p)), pos, r + 3)
-                    pygame.draw.circle(display.trail_surf_2, (*BALL2_COLOR, int(10 + 70 * p)), pos, r)
+                    pygame.draw.circle(display.trail_surf_2, (*theme.BALL2_GLOW, int(10 + 70 * p)), pos, r + 3)
+                    pygame.draw.circle(display.trail_surf_2, (*theme.BALL2_COLOR, int(10 + 70 * p)), pos, r)
 
             display.screen.blit(display.trail_surf_2, (0, 0))
 
@@ -573,12 +575,12 @@ class BallBallCollision(BaseModel):
             )
             draw_matte_ball(display.screen, pos, radius, base_color)
             draw_text(display.screen, label, (px, py + 4), FONT_TINY, (20, 27, 26), anchor="center")
-            draw_text(display.screen, f"m={format_sig3(mass)} kg", (px, py + radius + 18), FONT_TINY, MUTED,
+            draw_text(display.screen, f"m={format_sig3(mass)} kg", (px, py + radius + 18), FONT_TINY, theme.MUTED,
                       anchor="topright" if label == '球 1' else "topleft")
 
         pos1, pos2 = w2s(display_x1), w2s(display_x2)
-        draw_ball(pos1, radius_px, BALL1_COLOR, BALL1_EDGE, BALL1_GLOW, "球 1", m1)
-        draw_ball(pos2, radius_px, BALL2_COLOR, BALL2_EDGE, BALL2_GLOW, "球 2", m2)
+        draw_ball(pos1, radius_px, theme.BALL1_COLOR, theme.BALL1_EDGE, theme.BALL1_GLOW, "球 1", m1)
+        draw_ball(pos2, radius_px, theme.BALL2_COLOR, theme.BALL2_EDGE, theme.BALL2_GLOW, "球 2", m2)
 
 
         def draw_velocity(pos, velocity, label):
@@ -587,17 +589,17 @@ class BallBallCollision(BaseModel):
             y = pos[1] - radius_px - (18 if label == 'v1' else 60)
             if abs(velocity) < 0.01:
                 draw_text(display.screen, f"{label}=0", (pos[0], y),
-                          FONT_SMALL, GREEN, anchor="midbottom")
+                          FONT_SMALL, theme.GREEN, anchor="midbottom")
                 return
             direction = 1 if velocity > 0 else -1
             arrow_len = clamp(abs(velocity) * 10.0, 35, 150)
             finish = (int(pos[0] + direction * arrow_len), y)
-            draw_arrow(display.screen, (pos[0], y), finish, GREEN, 3)
+            draw_arrow(display.screen, (pos[0], y), finish, theme.GREEN, 3)
             if explaining:
                 flow_dots(display.screen, (pos[0], y), finish, self.explain_elapsed,
-                          GREEN, count=2, radius=2)
+                          theme.GREEN, count=2, radius=2)
             draw_text(display.screen, f"{label}={format_sig3(velocity)} m/s",
-                      (finish[0] + (10 if direction > 0 else -10), y - 12), FONT_SMALL, GREEN,
+                      (finish[0] + (10 if direction > 0 else -10), y - 12), FONT_SMALL, theme.GREEN,
                       anchor="topleft" if direction > 0 else "topright")
 
         if not explaining or self.explain_elapsed < 3.0:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import theme
+
 from dataclasses import dataclass, field
 
 import pygame
@@ -52,11 +54,19 @@ class Slider:
 
     def _build_track(self):
         self._static_track = pygame.Surface((self.w + 1, 16), pygame.SRCALPHA)
+<<<<<<< HEAD
         pygame.draw.line(self._static_track, (72, 72, 74),
                          (0, 8), (self.w, 8), 3)
         for i in range(6):
             tx = i * self.w / 5
             pygame.draw.circle(self._static_track, (142, 142, 147), (tx, 8), 1)
+=======
+        pygame.draw.line(self._static_track, theme.color((72, 72, 74)),
+                         (0, 8), (self.w, 8), 3)
+        for i in range(6):
+            tx = i * self.w / 5
+            pygame.draw.circle(self._static_track, theme.color((142, 142, 147)), (tx, 8), 1)
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
 
     def handle_event(self, event):
         changed = False
@@ -83,22 +93,30 @@ class Slider:
         surface.blit(self._static_track, (self.x, self.y - 8))
         kx = self.knob_x()
         if kx > self.x:
-            pygame.draw.line(surface, ACCENT,
+            pygame.draw.line(surface, theme.ACCENT,
                              (self.x, self.y), (kx, self.y), 3)
 
+<<<<<<< HEAD
         pygame.draw.circle(surface, INPUT_BG, (kx, self.y + 1), 9)
         pygame.draw.circle(surface, ACCENT, (kx, self.y), 7 if not self.dragging else 9)
         pygame.draw.circle(surface, (255, 255, 255), (kx, self.y), 3)
+=======
+        pygame.draw.circle(surface, theme.INPUT_BG, (kx, self.y + 1), 9)
+        pygame.draw.circle(surface, theme.ACCENT, (kx, self.y), 7 if not self.dragging else 9)
+        pygame.draw.circle(surface, theme.color((255, 255, 255)), (kx, self.y), 3)
+        if theme.current in ('light', 'dark'):
+            pygame.draw.circle(surface, (255, 255, 255), (kx, self.y), 8)
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
         label_width = max(40, int(self.w * 0.62))
         value_width = max(40, self.w - label_width + 10)
         if show_label:
             draw_text(surface, self.label, (self.x, self.y - 30),
-                      label_font or FONT_SMALL, MUTED, max_width=label_width)
+                      label_font or FONT_SMALL, theme.MUTED, max_width=label_width)
         if value_text is None:
             value_text = f"{format_sig3(self.value)}{self.unit}"
         if show_value:
             draw_text(surface, value_text, (self.x + self.w, self.y - 30),
-                      FONT_SMALL, TEXT, anchor="topright",
+                      FONT_SMALL, theme.TEXT, anchor="topright",
                       max_width=value_width)
 
 
@@ -146,23 +164,34 @@ class TimelineSlider:
         return changed
 
     def draw(self, surface, collision_times=()):
+<<<<<<< HEAD
         pygame.draw.line(surface, (44, 44, 46),
                          (self.rect.x, self.rect.centery),
                          (self.rect.right, self.rect.centery), 8)
         pygame.draw.line(surface, (72, 72, 74),
+=======
+        pygame.draw.line(surface, theme.color((44, 44, 46)),
+                         (self.rect.x, self.rect.centery),
+                         (self.rect.right, self.rect.centery), 8)
+        pygame.draw.line(surface, theme.color((72, 72, 74)),
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
                          (self.rect.x, self.rect.centery),
                          (self.rect.right, self.rect.centery), 3)
         for time in collision_times:
             x = self._x_for_value(time)
-            pygame.draw.line(surface, ACCENT_2,
+            pygame.draw.line(surface, theme.ACCENT_2,
                              (x, self.rect.y + 1),
                              (x, self.rect.bottom - 1), 2)
-            pygame.draw.circle(surface, ACCENT_2, (x, self.rect.centery), 5)
+            pygame.draw.circle(surface, theme.ACCENT_2, (x, self.rect.centery), 5)
         knob_x = self._x_for_value()
         pygame.draw.circle(surface, (0, 0, 0), (knob_x + 2, self.rect.centery + 2), 10)
+<<<<<<< HEAD
         pygame.draw.circle(surface, ACCENT, (knob_x, self.rect.centery), 8)
+=======
+        pygame.draw.circle(surface, theme.ACCENT, (knob_x, self.rect.centery), 8)
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
         draw_text(surface, f"{self.value:0.2f}s", (self.rect.right, self.rect.y - 3),
-                  FONT_TINY, TEXT, anchor="topright")
+                  FONT_TINY, theme.TEXT, anchor="topright")
 
 
 
@@ -184,22 +213,31 @@ class Button:
         self._hover_t += ((1.0 if self._hover else 0.0) - self._hover_t) * 0.18
         self._active_t += ((1.0 if active else 0.0) - self._active_t) * 0.22
         self._press_t *= 0.68
+<<<<<<< HEAD
         base_bg, base_border = (44, 44, 46), (72, 72, 74)
         bg = lerp_color(base_bg, (58, 58, 60), self._hover_t)
         border = lerp_color(base_border, (99, 99, 102), self._hover_t)
         bg = lerp_color(bg, (0, 92, 200), self._active_t)
         border = lerp_color(border, ACCENT, self._active_t)
         ink = lerp_color(MUTED, TEXT, max(self._hover_t, self._active_t))
+=======
+        base_bg, base_border = theme.color((44, 44, 46)), theme.color((72, 72, 74))
+        bg = lerp_color(base_bg, theme.color((58, 58, 60)), self._hover_t)
+        border = lerp_color(base_border, theme.color((99, 99, 102)), self._hover_t)
+        bg = lerp_color(bg, theme.color((0, 92, 200)), self._active_t)
+        border = lerp_color(border, theme.ACCENT, self._active_t)
+        ink = lerp_color(theme.MUTED, theme.TEXT, max(self._hover_t, self._active_t))
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
         visual_rect = self.rect.move(0, int(round(self._press_t * 2)))
         rounded_rect(surface, visual_rect, bg, min(14, visual_rect.h // 2), 1, border)
         if self._hover_t > 0.01:
             sheen_w = max(1, int((visual_rect.w - 24) * self._hover_t))
-            pygame.draw.line(surface, lerp_color(bg, TEXT, 0.22),
+            pygame.draw.line(surface, lerp_color(bg, theme.TEXT, 0.22),
                              (visual_rect.x + 12, visual_rect.y + 2),
                              (visual_rect.x + 12 + sheen_w, visual_rect.y + 2), 1)
         if self._active_t > 0.01:
             indicator_w = int((visual_rect.w - 24) * self._active_t)
-            pygame.draw.rect(surface, ACCENT,
+            pygame.draw.rect(surface, theme.ACCENT,
                              (visual_rect.centerx - indicator_w // 2,
                               visual_rect.bottom - 3, indicator_w, 2),
                              border_radius=1)
@@ -372,30 +410,30 @@ class InputBox:
     def draw(self, surface):
         # 参数名称已由 ParameterPanel 在单元第一行统一绘制。旧的
         # “精确输入”辅助标签会侵入面板标题，尤其遮挡第一行，故不再常驻。
-        border = RED if self.invalid_flash > 0 else (
-            INPUT_ACTIVE if self.active else INPUT_BORDER
+        border = theme.RED if self.invalid_flash > 0 else (
+            theme.INPUT_ACTIVE if self.active else theme.INPUT_BORDER
         )
-        rounded_rect(surface, self.rect, INPUT_BG, 7, 1, border)
+        rounded_rect(surface, self.rect, theme.INPUT_BG, 7, 1, border)
 
         text_x, text_y = self.rect.x + 7, self.rect.y + 6
         if self.active and self.has_selection():
             a, b = self.selection_range()
             sx = text_x + self.text_width(self.text[:a])
             sw = self.text_width(self.text[a:b])
-            pygame.draw.rect(surface, SELECT_BG,
+            pygame.draw.rect(surface, theme.SELECT_BG,
                              (sx, self.rect.y + 4,
                               max(1, sw), self.rect.h - 8),
                              border_radius=3)
-        draw_text(surface, self.text, (text_x, text_y), FONT_SMALL, TEXT)
+        draw_text(surface, self.text, (text_x, text_y), FONT_SMALL, theme.TEXT)
 
         if self.active and self.show_cursor:
             cx = text_x + self.text_width(self.text[:self.cursor])
-            pygame.draw.line(surface, (245, 250, 255),
+            pygame.draw.line(surface, theme.color((245, 250, 255)),
                              (cx, self.rect.y + 5),
                              (cx, self.rect.bottom - 5), 1)
         if self.unit:
             draw_text(surface, self.unit,
-                      (self.rect.right + 5, self.rect.y + 6), FONT_TINY, MUTED)
+                      (self.rect.right + 5, self.rect.y + 6), FONT_TINY, theme.MUTED)
 
 
 @dataclass
@@ -434,10 +472,14 @@ class Toggle:
         target = 1.0 if self.value else 0.0
         self._position += (target - self._position) * 0.22
         hover = 1.0 if self._hover else 0.0
-        track = lerp_color((27, 37, 35), (34, 96, 84), self._position)
-        border = lerp_color((61, 83, 79), (96, 210, 170), self._position)
-        knob = lerp_color((76, 104, 99), ACCENT_3, self._position)
-        track = lerp_color(track, (48, 68, 62), hover * (1.0 - self._position) * .5)
+        track = lerp_color(theme.color((27, 37, 35)), theme.color((34, 96, 84)), self._position)
+        border = lerp_color(theme.color((61, 83, 79)), theme.color((96, 210, 170)), self._position)
+        knob = lerp_color(theme.color((76, 104, 99)), theme.ACCENT_3, self._position)
+        track = lerp_color(track, theme.color((48, 68, 62)), hover * (1.0 - self._position) * .5)
+        if theme.current in ('light', 'dark'):
+            track = lerp_color(theme.INPUT_BORDER, (48, 209, 88), self._position)
+            border = track
+            knob = (255, 255, 255)
 
         rounded_rect(surface, self.rect, track, self.track_h // 2, 1, border)
         left = self.rect.x + self.track_h // 2
@@ -449,5 +491,5 @@ class Toggle:
 
         state = "开" if self.value else "关"
         draw_text(surface, state, (self.rect.x - 10, self.rect.y + 3),
-                  FONT_TINY, ACCENT_3 if self.value else MUTED,
+                  FONT_TINY, theme.ACCENT_3 if self.value else theme.MUTED,
                   anchor="topright")

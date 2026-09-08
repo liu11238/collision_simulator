@@ -465,7 +465,11 @@ class LiveLayout:
 
 LAYOUT = LiveLayout()
 
+<<<<<<< HEAD
 # iOS dark appearance: system surfaces, separators and semantic colours.
+=======
+# Dark appearance: layered surfaces, separators and semantic colours.
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
 BG_TOP = (0, 0, 0)
 BG_MID = (8, 8, 10)
 BG_BOTTOM = (18, 18, 20)
@@ -476,7 +480,11 @@ MUTED = (142, 142, 147)
 ACCENT = (10, 132, 255)       # systemBlue
 ACCENT_2 = (255, 159, 10)     # systemOrange
 ACCENT_3 = (48, 209, 88)      # systemGreen
+<<<<<<< HEAD
 ROD_COLOR = (255, 159, 10)
+=======
+ROD_COLOR = (242, 169, 32)
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
 ROD_EDGE = (255, 214, 150)
 ROD_GLOW = (255, 159, 10)
 BALL1_COLOR = (10, 132, 255)

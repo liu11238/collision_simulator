@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import theme
+
 import math
 from collections import OrderedDict
 from functools import lru_cache
@@ -32,13 +34,14 @@ def _cached_text_image(text, font, color):
     return render_text(text, font, color)
 
 
-def draw_text(surface, text, pos, font=FONT, color=TEXT, anchor="topleft",
+def draw_text(surface, text, pos, font=FONT, color=None, anchor="topleft",
               max_width=None, overflow="ellipsis"):
     """绘制文本；提供 ``max_width`` 时先做宽度适配再绘制。
 
     overflow: ``clip`` 硬截断；``ellipsis`` 省略号；``shrink`` 缩字号。
     返回实际绘制的矩形。
     """
+    color = theme.TEXT if color is None else color
     text = str(text)
     if max_width is not None:
         text, font = fit_text(text, font, max_width, overflow)
@@ -50,9 +53,10 @@ def draw_text(surface, text, pos, font=FONT, color=TEXT, anchor="topleft",
     return rect
 
 
-def draw_spaced_text(surface, text, pos, font=FONT, color=TEXT,
+def draw_spaced_text(surface, text, pos, font=FONT, color=None,
                      spacing=0, anchor="topleft"):
     """逐字绘制文本，并在相邻字符之间加入指定的横向间距。"""
+    color = theme.TEXT if color is None else color
     text = str(text)
     if not text:
         rect = pygame.Rect(0, 0, 0, font.get_height())
@@ -146,21 +150,36 @@ def draw_arrow(surface, start, end, color, width=3):
 
 
 def create_static_background(width: int, height: int):
+<<<<<<< HEAD
     """iOS-inspired dark canvas with restrained blue ambient light."""
+=======
+    """Dark canvas with restrained ambient light."""
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
     from config import LAYOUT
     bg = pygame.Surface((max(1, width), max(1, height))).convert()
-    draw_gradient_3(bg, (0, 0, width, height), BG_TOP, BG_MID, BG_BOTTOM)
+    draw_gradient_3(bg, (0, 0, width, height), theme.BG_TOP, theme.BG_MID, theme.BG_BOTTOM)
     scene = pygame.Rect(LAYOUT.scene).inflate(-2, -12)
     haze = pygame.Surface((width, height), pygame.SRCALPHA)
+<<<<<<< HEAD
     for radius, alpha in ((340, 14), (230, 10), (130, 8)):
         pygame.draw.circle(haze, (10, 132, 255, alpha),
                            (scene.left + scene.w // 3, scene.centery), radius)
     for radius, alpha in ((230, 5), (140, 7)):
         pygame.draw.circle(haze, (94, 92, 230, alpha),
+=======
+    for radius in range(340, 0, -4):
+        alpha = round(12 * (1 - radius / 340) ** 2)
+        pygame.draw.circle(haze, (*theme.ACCENT, alpha),
+                           (scene.left + scene.w // 3, scene.centery), radius)
+    for radius in range(230, 0, -4):
+        alpha = round(8 * (1 - radius / 230) ** 2)
+        pygame.draw.circle(haze, (*theme.ACCENT_2, alpha),
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
                            (scene.right - scene.w // 5, scene.top + 70), radius)
     bg.blit(haze, (0, 0))
     for x in range(scene.left + 20, scene.right - 16, 32):
         for y in range(scene.top + 20, scene.bottom - 12, 32):
+<<<<<<< HEAD
             pygame.draw.circle(bg, (44, 44, 46), (x, y), 1)
     pygame.draw.rect(bg, (58, 58, 60), scene, 1, border_radius=18)
     # Small drafting corners, deliberately quieter than the velocity vectors.
@@ -168,6 +187,15 @@ def create_static_background(width: int, height: int):
         for y, dy in ((scene.top + 12, 1), (scene.bottom - 12, -1)):
             pygame.draw.line(bg, (99, 99, 102), (x, y), (x + 10 * dx, y))
             pygame.draw.line(bg, (99, 99, 102), (x, y), (x, y + 10 * dy))
+=======
+            pygame.draw.circle(bg, theme.color((44, 44, 46)), (x, y), 1)
+    pygame.draw.rect(bg, theme.color((58, 58, 60)), scene, 1, border_radius=18)
+    # Small drafting corners, deliberately quieter than the velocity vectors.
+    for x, dx in ((scene.left + 12, 1), (scene.right - 12, -1)):
+        for y, dy in ((scene.top + 12, 1), (scene.bottom - 12, -1)):
+            pygame.draw.line(bg, theme.color((99, 99, 102)), (x, y), (x + 10 * dx, y))
+            pygame.draw.line(bg, theme.color((99, 99, 102)), (x, y), (x, y + 10 * dy))
+>>>>>>> 8a39dbc0035165c99ba623dafd6a847e929d9c13
     return bg
 
 
