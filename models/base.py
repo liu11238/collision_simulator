@@ -288,10 +288,10 @@ class BaseModel:
         pygame.draw.rect(screen, PANEL,
                          (0, timeline_rect.y, LAYOUT.width,
                           LAYOUT.height - timeline_rect.y))
-        pygame.draw.line(screen, (60, 81, 77), (0, timeline_rect.y),
+        pygame.draw.line(screen, (56, 56, 58), (0, timeline_rect.y),
                          (LAYOUT.width, timeline_rect.y), 2)
         footer_rect = pygame.Rect(LAYOUT.footer)
-        pygame.draw.line(screen, (76, 104, 99), (0, footer_rect.y),
+        pygame.draw.line(screen, (56, 56, 58), (0, footer_rect.y),
                          (LAYOUT.width, footer_rect.y), 1)
 
         state_text, display_time = self.interface_state()
@@ -309,17 +309,17 @@ class BaseModel:
         screen = display.screen
         metrics = LAYOUT.metrics
         rect = pygame.Rect(rect)
-        rounded_rect(screen, rect, PANEL_2, 12, 1, (49, 70, 64))
+        rounded_rect(screen, rect, PANEL_2, 16, 1, (56, 56, 58))
         pad = metrics.panel_padding
         title_font = font(metrics.small_font_size, True)
         number, _, label = title.partition("   ")
         badge = pygame.Rect(rect.x + pad, rect.y + 7, 25, 18)
-        rounded_rect(screen, badge, (42, 65, 58), 5)
+        rounded_rect(screen, badge, (0, 64, 140), 6)
         draw_text(screen, number, badge.center,
                   font(metrics.tiny_font_size, True), ACCENT, anchor="center")
         draw_text(screen, label or number, (badge.right + 8, rect.y + 7),
                   title_font, TEXT, max_width=rect.w - 2 * pad - 35)
-        pygame.draw.line(screen, (43, 61, 56),
+        pygame.draw.line(screen, (56, 56, 58),
                          (rect.x + pad, rect.y + PANEL_TITLE_H),
                          (rect.right - pad, rect.y + PANEL_TITLE_H), 1)
         reveal = 1.0 - (1.0 - self.ui_reveal) ** 3
@@ -343,13 +343,13 @@ class BaseModel:
         screen = display.screen
         metrics = LAYOUT.metrics
         info_rect = pygame.Rect(LAYOUT.info_rect)
-        rounded_rect(screen, info_rect, (14, 23, 23), 14)
+        rounded_rect(screen, info_rect, (28, 28, 30), 18)
         if self._info_glass.get_size() != (info_rect.w, info_rect.h):
             self._info_glass = self._build_info_glass()
         screen.blit(self._info_glass, info_rect.topleft)
 
-        pygame.draw.rect(screen, (49, 70, 64), info_rect, width=1,
-                         border_radius=14)
+        pygame.draw.rect(screen, (56, 56, 58), info_rect, width=1,
+                         border_radius=18)
 
         title_font = font(metrics.body_font_size, True)
         small = font(metrics.small_font_size)
@@ -361,7 +361,7 @@ class BaseModel:
         draw_horizontal_gradient_line(
             screen, info_rect.x + 16,
             info_rect.y + 10 + title_font.get_height() + 6,
-            info_rect.w - 32, ACCENT, (38, 52, 49), 1)
+            info_rect.w - 32, ACCENT, (56, 56, 58), 1)
         collision_lines = collision_lines or []
 
         # 保留完整碰撞快照，不再按关键词截成两行。面板高度不足时由

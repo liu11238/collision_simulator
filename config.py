@@ -465,35 +465,35 @@ class LiveLayout:
 
 LAYOUT = LiveLayout()
 
-# Quiet laboratory: graphite, sage, clay and warm ivory.
-BG_TOP = (17, 26, 27)
-BG_MID = (22, 34, 35)
-BG_BOTTOM = (26, 39, 39)
-PANEL = (15, 23, 24)
-PANEL_2 = (24, 36, 36)
-TEXT = (231, 236, 225)
-MUTED = (143, 164, 157)
-ACCENT = (151, 207, 184)
-ACCENT_2 = (218, 186, 131)
-ACCENT_3 = (171, 204, 158)
-ROD_COLOR = (203, 178, 129)
-ROD_EDGE = (239, 221, 178)
-ROD_GLOW = (177, 155, 113)
-BALL1_COLOR = (143, 199, 181)
-BALL1_EDGE = (215, 236, 223)
-BALL1_GLOW = (99, 161, 144)
-BALL2_COLOR = (209, 149, 123)
-BALL2_EDGE = (242, 211, 183)
-BALL2_GLOW = (174, 119, 96)
-PLATFORM = (71, 92, 89)
-PLATFORM_TOP = (118, 142, 132)
-GREEN = (171, 204, 158)
-RED = (224, 139, 126)
-INPUT_BG = (17, 28, 28)
-INPUT_BORDER = (58, 79, 74)
+# iOS dark appearance: system surfaces, separators and semantic colours.
+BG_TOP = (0, 0, 0)
+BG_MID = (8, 8, 10)
+BG_BOTTOM = (18, 18, 20)
+PANEL = (0, 0, 0)
+PANEL_2 = (28, 28, 30)
+TEXT = (242, 242, 247)
+MUTED = (142, 142, 147)
+ACCENT = (10, 132, 255)       # systemBlue
+ACCENT_2 = (255, 159, 10)     # systemOrange
+ACCENT_3 = (48, 209, 88)      # systemGreen
+ROD_COLOR = (255, 159, 10)
+ROD_EDGE = (255, 214, 150)
+ROD_GLOW = (255, 159, 10)
+BALL1_COLOR = (10, 132, 255)
+BALL1_EDGE = (176, 216, 255)
+BALL1_GLOW = (10, 132, 255)
+BALL2_COLOR = (255, 69, 58)
+BALL2_EDGE = (255, 190, 185)
+BALL2_GLOW = (255, 69, 58)
+PLATFORM = (72, 72, 74)
+PLATFORM_TOP = (142, 142, 147)
+GREEN = (48, 209, 88)
+RED = (255, 69, 58)
+INPUT_BG = (44, 44, 46)
+INPUT_BORDER = (72, 72, 74)
 INPUT_ACTIVE = ACCENT
-SELECT_BG = (62, 104, 91)
-TITLE_LETTER_SPACING = 1
+SELECT_BG = (0, 64, 221)
+TITLE_LETTER_SPACING = 0
 
 # ------------------------------------------------------------------
 # 旧常量兼容层：全部来自默认布局（1600×900）的快照。

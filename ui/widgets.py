@@ -52,11 +52,11 @@ class Slider:
 
     def _build_track(self):
         self._static_track = pygame.Surface((self.w + 1, 16), pygame.SRCALPHA)
-        pygame.draw.line(self._static_track, (61, 82, 77),
+        pygame.draw.line(self._static_track, (72, 72, 74),
                          (0, 8), (self.w, 8), 3)
         for i in range(6):
             tx = i * self.w / 5
-            pygame.draw.circle(self._static_track, (107, 130, 120), (tx, 8), 1)
+            pygame.draw.circle(self._static_track, (142, 142, 147), (tx, 8), 1)
 
     def handle_event(self, event):
         changed = False
@@ -88,7 +88,7 @@ class Slider:
 
         pygame.draw.circle(surface, INPUT_BG, (kx, self.y + 1), 9)
         pygame.draw.circle(surface, ACCENT, (kx, self.y), 7 if not self.dragging else 9)
-        pygame.draw.circle(surface, TEXT, (kx, self.y), 3)
+        pygame.draw.circle(surface, (255, 255, 255), (kx, self.y), 3)
         label_width = max(40, int(self.w * 0.62))
         value_width = max(40, self.w - label_width + 10)
         if show_label:
@@ -146,10 +146,10 @@ class TimelineSlider:
         return changed
 
     def draw(self, surface, collision_times=()):
-        pygame.draw.line(surface, (41, 55, 53),
+        pygame.draw.line(surface, (44, 44, 46),
                          (self.rect.x, self.rect.centery),
                          (self.rect.right, self.rect.centery), 8)
-        pygame.draw.line(surface, (69, 94, 89),
+        pygame.draw.line(surface, (72, 72, 74),
                          (self.rect.x, self.rect.centery),
                          (self.rect.right, self.rect.centery), 3)
         for time in collision_times:
@@ -159,8 +159,8 @@ class TimelineSlider:
                              (x, self.rect.bottom - 1), 2)
             pygame.draw.circle(surface, ACCENT_2, (x, self.rect.centery), 5)
         knob_x = self._x_for_value()
-        pygame.draw.circle(surface, (15, 21, 20), (knob_x + 2, self.rect.centery + 2), 10)
-        pygame.draw.circle(surface, ACCENT_3, (knob_x, self.rect.centery), 8)
+        pygame.draw.circle(surface, (0, 0, 0), (knob_x + 2, self.rect.centery + 2), 10)
+        pygame.draw.circle(surface, ACCENT, (knob_x, self.rect.centery), 8)
         draw_text(surface, f"{self.value:0.2f}s", (self.rect.right, self.rect.y - 3),
                   FONT_TINY, TEXT, anchor="topright")
 
@@ -184,14 +184,14 @@ class Button:
         self._hover_t += ((1.0 if self._hover else 0.0) - self._hover_t) * 0.18
         self._active_t += ((1.0 if active else 0.0) - self._active_t) * 0.22
         self._press_t *= 0.68
-        base_bg, base_border = (29, 43, 41), (65, 87, 77)
-        bg = lerp_color(base_bg, (43, 62, 56), self._hover_t)
-        border = lerp_color(base_border, (114, 150, 132), self._hover_t)
-        bg = lerp_color(bg, (41, 64, 58), self._active_t)
+        base_bg, base_border = (44, 44, 46), (72, 72, 74)
+        bg = lerp_color(base_bg, (58, 58, 60), self._hover_t)
+        border = lerp_color(base_border, (99, 99, 102), self._hover_t)
+        bg = lerp_color(bg, (0, 92, 200), self._active_t)
         border = lerp_color(border, ACCENT, self._active_t)
         ink = lerp_color(MUTED, TEXT, max(self._hover_t, self._active_t))
         visual_rect = self.rect.move(0, int(round(self._press_t * 2)))
-        rounded_rect(surface, visual_rect, bg, 9, 1, border)
+        rounded_rect(surface, visual_rect, bg, min(14, visual_rect.h // 2), 1, border)
         if self._hover_t > 0.01:
             sheen_w = max(1, int((visual_rect.w - 24) * self._hover_t))
             pygame.draw.line(surface, lerp_color(bg, TEXT, 0.22),

@@ -47,15 +47,15 @@ def advance_ambience(dt):
 
 def begin_frame():
     """清空整帧并铺满顶栏/场景背景，避免动态文字残影和黑边。"""
-    screen.fill((17, 26, 27))
+    screen.fill((0, 0, 0))
     screen.blit(STATIC_BG, (0, 0))
     # A handful of slow drifting motes, confined to the experiment surface.
     scene = pygame.Rect(LAYOUT.scene).inflate(-40, -40)
     for i in range(16):
         x = scene.x + (i * .61803398875 % 1) * scene.w + math.sin(_ambient_time * .15 + i) * 7
         y = scene.y + ((i * .381966 + _ambient_time * .002) % 1) * scene.h
-        shade = int(58 + 10 * math.sin(_ambient_time * .4 + i))
-        pygame.draw.circle(screen, (shade, shade + 15, shade + 8), (int(x), int(y)), 1)
+        shade = int(42 + 8 * math.sin(_ambient_time * .4 + i))
+        pygame.draw.circle(screen, (shade, shade, shade + 8), (int(x), int(y)), 1)
 
 
 
