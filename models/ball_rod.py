@@ -695,6 +695,10 @@ class BallHitsRod(BaseModel):
         """判断杆是否已进入静摩擦可维持的低速平衡。"""
         if self.friction_moment() <= self.EPS or abs(omega) > 2.0e-3:
             return False
+        return self._static_friction_holds(theta)
+
+    def _static_friction_holds(self, theta):
+        """静止时，转轴摩擦是否足以平衡当前位置的重力矩。"""
         gravity_torque = abs(self.sliders["M"].value
                              * self.sliders["g"].value
                              * self.sliders["L"].value
@@ -702,8 +706,25 @@ class BallHitsRod(BaseModel):
         return gravity_torque <= self.friction_moment() + 1e-10
 
     def _advance_after_collision(self, dt):
-        """用 RK4 推进碰撞后的 ``theta``、``omega`` 和耗散能。"""
-        theta0, omega0, dissipated0 = self.theta, self.omega, self.damping_energy
+        """用 RK4 推进碰后运动，并在过零时切换到静摩擦。
+
+        库仑摩擦在 ``omega=0`` 处不连续，直接把耗散功率也交给 RK4
+        会在过零子步重复计算摩擦功。这里用过零事件决定是否锁止，再用
+        杆机械能的实际下降量登记摩擦耗散，使能量账本严格闭合。
+        """
+        theta0, omega0 = self.theta, self.omega
+
+        # 已经静止且重力矩不足以克服最大静摩擦时，状态必须保持不变，
+        # 不能在后续子步中出现数值抖动。
+        if self._can_stick(theta0, omega0):
+            # 第一次进入该分支时 omega 可能仍在静止判据的微小阈值内；
+            # 将被钳除的剩余动能完整记入摩擦耗散。
+            if abs(omega0) > self.EPS:
+                self.damping_energy += 0.5 * self.inertia() * omega0 * omega0
+            self.omega = 0.0
+            return
+
+        mechanical0 = self.mechanical_energy(theta0, omega0)
 
         k1 = self._after_derivatives(theta0, omega0)
         k2 = self._after_derivatives(
@@ -719,21 +740,31 @@ class BallHitsRod(BaseModel):
             omega0 + dt * k3[1],
         )
 
-        self.theta = theta0 + dt * (
+        theta1 = theta0 + dt * (
             k1[0] + 2.0 * k2[0] + 2.0 * k3[0] + k4[0]
         ) / 6.0
-        self.omega = omega0 + dt * (
+        omega1 = omega0 + dt * (
             k1[1] + 2.0 * k2[1] + 2.0 * k3[1] + k4[1]
         ) / 6.0
-        self.damping_energy = dissipated0 + dt * (
-            k1[2] + 2.0 * k2[2] + 2.0 * k3[2] + k4[2]
-        ) / 6.0
-        if self._can_stick(self.theta, self.omega):
-            # 把本子步内剩余的微小动能也计入摩擦账本，避免“钳零”凭空
-            # 制造或删除能量；势能保持在当前位置。
-            kinetic_before_lock = 0.5 * self.inertia() * self.omega ** 2
-            self.damping_energy += kinetic_before_lock
-            self.omega = 0.0
+
+        # 若本子步跨过零速，估计真实停点；只有该处重力矩能被静摩擦
+        # 平衡时才锁止，否则允许杆越过转折点继续运动。
+        crossed_zero = abs(omega0) > self.EPS and omega0 * omega1 <= 0.0
+        if crossed_zero:
+            fraction = abs(omega0) / max(abs(omega0) + abs(omega1), self.EPS)
+            theta_stop = theta0 + fraction * (theta1 - theta0)
+            if self._static_friction_holds(theta_stop):
+                theta1 = theta_stop
+                omega1 = 0.0
+
+        self.theta = theta1
+        self.omega = omega1
+        if self.friction_moment() > self.EPS:
+            mechanical1 = self.mechanical_energy(theta1, omega1)
+            # 使用带符号差值，抵消 RK4 在非锁止转折点可能产生的微小
+            # 数值能量回升；从碰撞后状态到当前状态的累计值因此始终与
+            # 机械能下降严格一致。
+            self.damping_energy += mechanical0 - mechanical1
 
     def _advance_simulation_substep(self, sub):
         if self.phase == "swinging" and not self.collided:

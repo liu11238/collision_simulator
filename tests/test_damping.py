@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import sys
 import unittest
@@ -48,12 +49,15 @@ class FrictionTest(unittest.TestCase):
         model = self.make_model(vc=3.0, h=0.72, tau0=0.05)
         model.jump_to_collision()
         initial = model.mechanical_energy()
+        initial_damping = model.damping_energy
         self.run_after(model, 2.0)
         final = model.mechanical_energy()
 
         self.assertGreater(model.damping_energy, 0.0)
         self.assertLess(final, initial)
-        self.assertAlmostEqual(initial - final, model.damping_energy, delta=5e-4)
+        self.assertAlmostEqual(
+            initial - final, model.damping_energy - initial_damping, places=10
+        )
 
     def test_energy_account_closes_after_friction_motion(self):
         model = self.make_model(vc=3.0, h=0.72, e=0.6, tau0=0.05)
@@ -70,6 +74,30 @@ class FrictionTest(unittest.TestCase):
         self.assertAlmostEqual(
             account["collision"], model.last_result["collision_energy_loss"], places=12
         )
+
+    def test_static_friction_locks_and_residual_stays_closed(self):
+        model = self.make_model(vc=3.0, tau0=0.5)
+        model.jump_to_collision()
+        model.running = True
+
+        for _ in range(24000):
+            model.step(1.0 / 240.0)
+            if model.omega == 0.0 and model._static_friction_holds(model.theta):
+                break
+        else:
+            self.fail("杆未进入静摩擦锁止状态")
+
+        stopped = (model.theta, model.omega, model.damping_energy)
+        for _ in range(2400):
+            model.step(1.0 / 240.0)
+        self.assertEqual(stopped, (model.theta, model.omega, model.damping_energy))
+
+        gravity_torque = abs(
+            model.sliders["M"].value * model.sliders["g"].value
+            * model.sliders["L"].value * math.cos(model.theta) / 2.0
+        )
+        self.assertLessEqual(gravity_torque, model.friction_moment() + 1e-10)
+        self.assertAlmostEqual(model.energy_breakdown().residual, 0.0, places=10)
 
     def test_friction_does_not_change_instantaneous_collision(self):
         no_friction = self.make_model(vc=3.0, h=0.72, tau0=0.0)
