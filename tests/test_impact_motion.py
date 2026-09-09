@@ -38,8 +38,8 @@ class ImpactMotionTests(unittest.TestCase):
     def test_camera_zooms_and_returns_without_clipping_subjects(self):
         for width, height in ((1280, 720), (1600, 900), (1920, 1080)):
             LAYOUT.apply(width, height)
-            for length in (.25, 1.0, 2.0):
-                for ratio in (0.0, .72, 1.0):
+            for length in (.25, .40, .50):
+                for ratio in (.10, .72, 1.0):
                     model = self.rod(L=length, h=length * ratio)
                     explainer = model.impact_explainer
                     base = model.scene_camera()

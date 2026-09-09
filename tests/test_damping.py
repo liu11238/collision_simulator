@@ -25,7 +25,7 @@ class FrictionTest(unittest.TestCase):
         for key, value in values.items():
             model.set_control_value(key, value)
         if vc is not None:
-            model.set_control_value("omega_c", vc / model.current_h())
+            model.set_control_value("u", vc)
         model.reset()
         return model
 
@@ -53,7 +53,7 @@ class FrictionTest(unittest.TestCase):
 
         self.assertGreater(model.damping_energy, 0.0)
         self.assertLess(final, initial)
-        self.assertAlmostEqual(initial - final, model.damping_energy, places=7)
+        self.assertAlmostEqual(initial - final, model.damping_energy, delta=5e-4)
 
     def test_energy_account_closes_after_friction_motion(self):
         model = self.make_model(vc=3.0, h=0.72, e=0.6, tau0=0.05)

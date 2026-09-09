@@ -29,7 +29,7 @@ class EnergyRefactorTest(unittest.TestCase):
         for key, value in values.items():
             model.set_control_value(key, value)
         if vc is not None:
-            model.set_control_value("omega_c", vc / model.current_h())
+            model.set_control_value("u", vc)
         model.reset()
         return model
 

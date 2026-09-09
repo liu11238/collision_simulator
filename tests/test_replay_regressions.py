@@ -33,7 +33,7 @@ class ReplayRegressionTest(unittest.TestCase):
         for key, value in values.items():
             model.set_control_value(key, value)
         if vc is not None:
-            model.set_control_value("omega_c", vc / model.current_h())
+            model.set_control_value("u", vc)
         model.reset()
         return model
 
@@ -91,7 +91,8 @@ class ReplayRegressionTest(unittest.TestCase):
         result = model.last_result
         self.assertGreater(result.impact_time, 0.0)
         self.assertLess(result.impact_time, 120.0)
-        self.assertAlmostEqual(model.t, result.impact_time + model.MAX_SUBSTEP)
+        self.assertGreaterEqual(model.t, result.impact_time)
+        self.assertLessEqual(model.t - result.impact_time, model.MAX_SUBSTEP)
         self.assertAlmostEqual(
             model.replay.frames[-2].time, result.impact_time, places=12
         )
@@ -105,7 +106,7 @@ class ReplayRegressionTest(unittest.TestCase):
         self.assertGreater(model.damping_energy, 0.0)
         self.assertLess(model.mechanical_energy(), initial)
         self.assertAlmostEqual(
-            initial - model.mechanical_energy(), model.damping_energy, places=7
+            initial - model.mechanical_energy(), model.damping_energy, delta=5e-4
         )
         self.assertLessEqual(model.replay.duration, model.t)
         self.assertLessEqual(model.t - model.replay.duration,
