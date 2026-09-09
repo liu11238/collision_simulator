@@ -130,13 +130,13 @@ def draw_horizontal_gradient_line(surface, x, y, w, c1, c2, height=1):
     surface.blit(image, (int(x), int(y)))
 
 
-def draw_arrow(surface, start, end, color, width=3):
+def draw_arrow(surface, start, end, color, width=3, head_size=12):
     pygame.draw.line(surface, color, start, end, width)
     dx = end[0] - start[0]
 
     dy = end[1] - start[1]
     ang = math.atan2(dy, dx)
-    size = 12
+    size = max(0, head_size)
     left = (
         end[0] - size * math.cos(ang - 0.45),
         end[1] - size * math.sin(ang - 0.45),

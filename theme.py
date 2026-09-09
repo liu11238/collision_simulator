@@ -4,7 +4,7 @@ from pathlib import Path
 
 PALETTES = json.loads(Path(__file__).with_name('themes.json').read_text())
 NAMES = {'green': '绿色', 'blue': '蓝色', 'dark': '黑色', 'light': '白色'}
-current = 'dark'
+current = 'blue'
 
 def __getattr__(name):
     if name in PALETTES[current]:

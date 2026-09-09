@@ -9,6 +9,9 @@ from core import display
 from config import LAYOUT
 
 class ThemeTests(unittest.TestCase):
+    def test_default_theme_is_blue(self):
+        self.assertEqual(theme.current, 'blue')
+
     def test_switch_preserves_simulation_and_renders_both_models(self):
         app = App()
         for size in ((1280,720), (1600,900)):

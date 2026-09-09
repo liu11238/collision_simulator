@@ -8,6 +8,7 @@ os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
 os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 
 import pygame
+import theme
 
 from config import BALL1_COLOR, LAYOUT, ROD_COLOR
 from core import display
@@ -72,11 +73,11 @@ class ImpactMotionTests(unittest.TestCase):
         for elapsed in (0.0, .4, 1.4, 2.19):
             balls, rods = [], []
             def sphere(surface, center, radius, color):
-                if surface is display.screen and color == BALL1_COLOR:
+                if surface is display.screen and color == theme.BALL1_COLOR:
                     balls.append((center, radius))
                 return draw_matte_ball(surface, center, radius, color)
             def line(surface, color, start, end, width=1):
-                if surface is display.screen and color == ROD_COLOR:
+                if surface is display.screen and color == theme.ROD_COLOR:
                     rods.append((start, end, width))
                 return real_line(surface, color, start, end, width)
             model.impact_explainer.elapsed = elapsed
@@ -86,7 +87,7 @@ class ImpactMotionTests(unittest.TestCase):
             center, radius = balls[-1]
             start, end, width = rods[-1]
             self.assertEqual(start[0], end[0])
-            self.assertLessEqual(abs(center[0] - radius - (start[0] + width / 2)), 1)
+            self.assertLessEqual(abs(center[0] + radius - (start[0] - width / 2)), 1)
 
     def test_each_stage_moves_in_scene_and_panel_including_elastic_energy(self):
         LAYOUT.apply(1280, 720)

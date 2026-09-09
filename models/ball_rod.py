@@ -44,7 +44,7 @@ class BallHitsRod(BaseModel):
     ``theta`` 的定义沿用原模型：杆端坐标为
     ``(-L*cos(theta), L*sin(theta))``，所以 ``theta=pi/2`` 是竖直向下，
     ``theta=0`` 是水平向左。UI 中的 ``initial_angle_deg`` 则是相对于竖直
-    向下方向的摆角。碰撞前细杆固定在 ``theta=pi/2``，小球从右侧向左
+    向下方向的摆角。碰撞前细杆固定在 ``theta=pi/2``，小球从左侧向右
     运动；碰撞后小球与杆按冲量结果继续运动。
     """
 
@@ -371,9 +371,9 @@ class BallHitsRod(BaseModel):
         self.target_omega = launch["target_omega"]
         self.gravity_omega_max = launch["gravity_omega_max"]
         self.uses_initial_speed = launch["uses_initial_speed"]
-        # 小球从杆右侧向左入射；ball_x=0 表示球面与杆相切的碰撞位置。
-        self.ball_x = max(0.15, 0.80 * self.sliders["L"].value)
-        self.ball_v = -self.target_ball_speed()
+        # 小球从杆左侧向右入射；ball_x=0 表示球面与杆相切的碰撞位置。
+        self.ball_x = -max(0.15, 0.80 * self.sliders["L"].value)
+        self.ball_v = self.target_ball_speed()
         self.initial_energy = self.total_mechanical_energy()
         self.t = 0.0
         self.collided = False
@@ -738,11 +738,11 @@ class BallHitsRod(BaseModel):
     def _advance_simulation_substep(self, sub):
         if self.phase == "swinging" and not self.collided:
             # 杆保持静止，由小球真实平移到碰撞位置。
-            if self.ball_v >= -self.EPS:
+            if self.ball_v <= self.EPS:
                 self.running = False
                 self.notice = "小球入射速率为 0，无法到达杆。"
-            elif self.ball_x + self.ball_v * sub <= 0.0:
-                time_to_impact = self.ball_x / -self.ball_v
+            elif self.ball_x + self.ball_v * sub >= 0.0:
+                time_to_impact = -self.ball_x / self.ball_v
                 self.ball_x = 0.0
                 self.t += time_to_impact
                 self.begin_collision(explain=False if self._fast_forwarding else None)
@@ -884,7 +884,7 @@ class BallHitsRod(BaseModel):
         scale = min(scale, max(1.0, (LAYOUT.scene_y + LAYOUT.scene_h - pivot[1] - 30) / display_L))
         zoom = 1.0 + .24 * explainer.focus_strength() if explainer else 1.0
         return fitted_camera(LAYOUT.scene, pivot, scale, (0.0, h),
-                             (-.38 * L, 0.0, .22 + 2 * rb, L), zoom,
+                             (-max(1.15 * L, .22 + 2 * rb), 0.0, .38 * L, L), zoom,
                              (36, 48, 230, 30))
 
     def _draw_scene_contents(self):
@@ -1036,7 +1036,7 @@ class BallHitsRod(BaseModel):
             display_rod_trail = self.rod_trail
             display_ball_trail = self.ball_trail
 
-        rod_w = max(5, int(0.028 * scale))
+        rod_w = max(3, int(0.017 * scale))
         if display_rod_trail:
             display.trail_surf_1.fill((0, 0, 0, 0))
             for point in display_rod_trail:
@@ -1083,10 +1083,13 @@ class BallHitsRod(BaseModel):
         pygame.draw.circle(display.screen, theme.color((255, 255, 255)), (cpx, cpy), 4)
 
         if explainer and explainer.phase == "velocity":
-            tangent_len = clamp(abs(display_contact_speed) * scale * 0.07, 18, 105)
+            tangent_len = clamp(abs(display_contact_speed) * scale * 0.07, 0, 105)
             tangent_direction = 1 if display_contact_speed >= 0 else -1
             tangent_end = (cpx + int(tangent_direction * tangent_len), cpy)
-            draw_arrow(display.screen, (cpx, cpy), tangent_end, theme.ACCENT_2, 3)
+            draw_arrow(
+                display.screen, (cpx, cpy), tangent_end, theme.ACCENT_2, 3,
+                head_size=min(12, tangent_len * 0.35),
+            )
             flow_dots(display.screen, (cpx, cpy), tangent_end, explainer.elapsed,
                       theme.ACCENT_2, count=2, radius=2)
             draw_text(display.screen, f"hω={format_sig3(display_contact_speed)} m/s",
@@ -1119,7 +1122,7 @@ class BallHitsRod(BaseModel):
             for i, (bx, by) in enumerate(display_ball_trail):
                 p = i / max(1, len(display_ball_trail) - 1)
                 raw_pos = w2s(bx, by)
-                pos = (raw_pos[0] + max(12, int(rb * scale)) + (rod_w + 1) // 2, raw_pos[1])
+                pos = (raw_pos[0] - max(12, int(rb * scale)) - (rod_w + 1) // 2, raw_pos[1])
                 if -100 <= pos[0] <= LAYOUT.width + 100:
                     r = max(2, int(rb * scale * (0.22 + 0.40 * p)))
                     pygame.draw.circle(display.trail_surf_2, (*theme.BALL1_GLOW, int(12 + 75 * p)), pos, r + 3)
@@ -1137,7 +1140,7 @@ class BallHitsRod(BaseModel):
         # ball_x is displacement from impact, not the rendered sphere centre.
         # Offset the centre by its radius and half the visible rod thickness.
         raw_ball_pos = w2s(display_ball_x, h)
-        ball_pos = (raw_ball_pos[0] + br + (rod_w + 1) // 2, raw_ball_pos[1])
+        ball_pos = (raw_ball_pos[0] - br - (rod_w + 1) // 2, raw_ball_pos[1])
         draw_soft_shadow(
             display.screen,
             (ball_pos[0] - br - 4, sy - max(3, br // 4),
@@ -1175,11 +1178,16 @@ class BallHitsRod(BaseModel):
             )
 
         if abs(display_ball_v) > 0.01 and (not explainer or explainer.phase == "velocity"):
-            arrow_len = clamp(abs(display_ball_v) * scale * 0.07, 35, 150)
+            # 慢放阶段必须允许长度连续缩到零，否则速度变号时箭头会
+            # 从固定最小长度突然翻向。
+            arrow_len = clamp(abs(display_ball_v) * scale * 0.07, 0, 150)
             direction = 1 if display_ball_v > 0 else -1
             ay = ball_pos[1] - br - 12
             finish = (int(ball_pos[0] + direction * arrow_len), ay)
-            draw_arrow(display.screen, (ball_pos[0], ay), finish, theme.GREEN, 3)
+            draw_arrow(
+                display.screen, (ball_pos[0], ay), finish, theme.GREEN, 3,
+                head_size=min(12, arrow_len * 0.35),
+            )
             if explainer:
                 flow_dots(display.screen, (ball_pos[0], ay), finish, explainer.elapsed,
                           theme.GREEN, count=2, radius=2)
@@ -1259,7 +1267,7 @@ class BallHitsRod(BaseModel):
         self._info_payload = (
             current_lines, collision_lines,
             [
-                "细杆初始静止，小球从右侧入射并撞击杆",
+                "细杆初始静止，小球从左侧入射并撞击杆",
                 "u 是小球入射速率；碰撞前杆角速度为 0",
                 "杆长比例尺为 0--0.5 m；L=0 仅作为比例端点",
                 "势能零点在杆竖直向下；恒定摩擦矩 tau_f=-tau0*sign(w)",

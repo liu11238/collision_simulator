@@ -44,7 +44,7 @@ class BallRodTest(unittest.TestCase):
         model = self.make_model(vc=4.2, h=0.8)
         self.run_to_collision(model)
         result = model.last_result
-        self.assertAlmostEqual(result["u_before"], -4.2, places=9)
+        self.assertAlmostEqual(result["u_before"], 4.2, places=9)
         self.assertAlmostEqual(result["omega_before"], 0.0, places=12)
         self.assertAlmostEqual(model.collision_point_speed(),
                                abs(result["contact_after"]), delta=1e-3)
@@ -54,8 +54,8 @@ class BallRodTest(unittest.TestCase):
         self.assertFalse(model.uses_initial_speed)
         self.assertEqual(model.initial_angle_deg, 0.0)
         self.assertEqual(model.initial_omega, 0.0)
-        self.assertGreater(model.ball_x, 0.0)
-        self.assertLess(model.ball_v, 0.0)
+        self.assertLess(model.ball_x, 0.0)
+        self.assertGreater(model.ball_v, 0.0)
 
         expected = 0.5 * model.sliders["m"].value * model.ball_v ** 2
         self.assertAlmostEqual(model.initial_energy, expected, places=10)
@@ -149,7 +149,7 @@ class BallRodTest(unittest.TestCase):
         self.assertAlmostEqual(model.initial_angle_deg, 0.0, places=12)
         self.assertEqual(model.initial_omega, 0.0)
         self.run_to_collision(model)
-        self.assertAlmostEqual(model.last_result["u_before"], -4.0, places=9)
+        self.assertAlmostEqual(model.last_result["u_before"], 4.0, places=9)
 
     def test_collision_angular_momentum_and_elastic_energy(self):
         model = self.make_model(vc=3.0, h=0.72)
